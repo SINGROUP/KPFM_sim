@@ -11,9 +11,17 @@ import kpfm_sim_global_constants as global_const
 
 from cp2k_init import CP2k_init, init_cp2k_restart
 
+def get_output_path(wrk_dir,pr_nm):
+        return wrk_dir + "/" + pr_nm + ".out"
+
+# write out things for debugging : #
+
+debug = True
+
+# end #
 
 task_name = "kpfm_task"
-task_types = ["descend_tip", "tune_bias"]
+task_types = ["descend_tip"] #, "tune_bias"]
 xyz_file_name = task_name + global_const.cp2k_xyz_suffix
 restart_file = task_name + global_const.cp2k_restart_suffix
 output_file = task_name + global_const.cp2k_out_suffix
@@ -49,6 +57,14 @@ task_db_path = os.path.join(worker_path, task_db_file)
 
 task_db = Task_control_db(task_db_path)
 
+if debug: 
+    print("worker_dir  ",worker_dir )
+    print("worker_path ",worker_path)
+    print("task_db_file",task_db_file)
+    print("task_db_path",task_db_path)
+    print("task_db     ",task_db_path)
+    #sys.exit()
+
 # Make sure that the fetched task is reserved so that it is not fetched by
 # another slurm job at the same time
 with task_db:
@@ -60,7 +76,7 @@ write_task_info(task_id, task_name)
 task.init_calculation(task_name, project_path, worker_path)
 
 cp2k_restart_exists = False
-print "Type of the task = {}, state of the task = {}".format(task.task_type, task.state)
+print("Type of the task = {}, state of the task = {}".format(task.task_type, task.state))
 if task.state == global_const.state_waiting:
     cp2k_restart_exists = task.get_restart_data()
 
@@ -93,8 +109,8 @@ while is_steps_left:
     # exists in the results database. In that case, skip it.
     scan_point_exists = task.is_scan_point_in_db()
     if scan_point_exists:
-        print "Scan point x = {}, y = {}, s = {}, V = {} was found in the results database. " \
-                "Skipping...".format(task.x, task.y, task.s, task.V)
+        print("Scan point x = {}, y = {}, s = {}, V = {} was found in the results database. " \
+                "Skipping...".format(task.x, task.y, task.s, task.V))
         is_steps_left = task.next_step()
         continue
     
@@ -113,8 +129,8 @@ while is_steps_left:
         task_db.update_task_slurm_id(task_id, slurm_id)
         task_db.update_task_state(task_id, global_const.state_running)
     try:
-        print "Running simulation at scan point x = {}, y = {}, s = {}, V = {}".format(task.x,
-                task.y, task.s, task.V)
+        print("Running simulation at scan point x = {}, y = {}, s = {}, V = {}".format(task.x,
+                task.y, task.s, task.V))
         #cp2k_calc.write_input_file()
         cp2k_calc.run()
     except CalledProcessError:
@@ -123,7 +139,8 @@ while is_steps_left:
         task.update_atoms_object(xyz_file_name)
     except IOError:
         cp2k_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
-    task.write_step_results_to_db(cp2k_calc.get_output_path())
+    task.write_step_results_to_db("./kpfm_task.out")
+    #task.write_step_results_to_db(get_output_path(worker_dir,task_name))
     is_steps_left = task.next_step()
     with task_db:
         task_db.update_task(task_id, task)

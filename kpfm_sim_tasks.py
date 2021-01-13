@@ -14,12 +14,11 @@ import kpfm_sim_global_constants as global_const
 
 eps = 1.0e-13
 
+debug = True
 
-class Abstract_task(object):
-    __metaclass__ = ABCMeta
-
+class Abstract_task(object, metaclass=ABCMeta):
     @abstractmethod
-    def __init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id):
+    def __init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=False):
         self.x = x
         self.y = y
         self.s = s
@@ -30,6 +29,7 @@ class Abstract_task(object):
         self.slurm_id = slurm_id
         self.calc_initialized = False
         self.E_per_V = None
+        self.kpts = kpts
 
 
     @abstractmethod
@@ -76,8 +76,8 @@ class Abstract_task(object):
             shutil.copy(os.path.join(restart_data_path, self.task_name +
                         global_const.cp2k_out_suffix), '.')
             shutil.copy(os.path.join(restart_data_path, self.task_name +
-                        global_const.cp2k_wfn_suffix), '.')
-            print "\nRestart files found\n"
+                        global_const.cp2k_wfn_suffix(kpts=self.kpts)), '.')
+            print("\nRestart files found\n")
         except IOError:
             return False
         return True
@@ -94,8 +94,10 @@ class Abstract_task(object):
         os.remove(xyz_file)
 
 
-    def write_step_results_to_db(self, cp2k_output_path):
-        wfn_file_name = self.task_name + global_const.cp2k_wfn_suffix
+    def write_step_results_to_db(self, cp2k_output_path, kpts=False):
+        print ("debug: kpts =",kpts,"; self.kpts",self.kpts)
+        wfn_file_name = self.task_name + global_const.cp2k_wfn_suffix(kpts=kpts)
+        print ("debug: wfn_file_name" , wfn_file_name )
         cp2k_output = get_output_from_file(cp2k_output_path)
         energy = get_energy_from_output(cp2k_output)
         charges = get_charges_from_output(cp2k_output)
@@ -130,7 +132,7 @@ class Abstract_task(object):
         except OSError:
             pass
         wfn_storage_file_name = global_const.wfn_storage_prefix + repr(scan_point_id) + \
-                                "_" + os.path.basename(self.worker_path) + global_const.cp2k_wfn_suffix
+                                "_" + os.path.basename(self.worker_path) + global_const.cp2k_wfn_suffix(kpts=self.kpts)
         wfn_storage_path = os.path.join(wfn_storage_base_path, wfn_storage_file_name)
         shutil.copy(wfn_file_name, wfn_storage_path)
         wfn_rel_storage_path = os.path.join(global_const.wfn_storage_folder, wfn_storage_file_name)
@@ -139,8 +141,8 @@ class Abstract_task(object):
 
 class Descend_tip_task(Abstract_task):
     def __init__(self, x, y, s, V, s_start, s_end, s_step, result_db_file,
-                global_res_db_file, state = global_const.state_planned, slurm_id = None):
-        Abstract_task.__init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id)
+                global_res_db_file, state = global_const.state_planned, slurm_id = None, kpts=False):
+        Abstract_task.__init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=kpts)
         self.task_type = global_const.task_descend_tip
         self.s_start = s_start
         self.s_end = s_end
@@ -168,8 +170,12 @@ class Descend_tip_task(Abstract_task):
     # to its current location
     def init_calculation(self, task_name, project_path, worker_path):
         Abstract_task.init_calculation(self, task_name, project_path, worker_path)
+        if debug:
+            print ("DEBUG: inside init calculation")
         
-        wfn_file_name = self.task_name + global_const.cp2k_wfn_suffix
+        wfn_file_name = self.task_name + global_const.cp2k_wfn_suffix(kpts=self.kpts)
+        if debug:
+            print ("wfn_file_name",wfn_file_name)
         
         # Determine here which scan point to get
         with self.global_results:
@@ -181,14 +187,18 @@ class Descend_tip_task(Abstract_task):
             if scan_points:
                 init_source_point = scan_points[0]
                 init_source = self.results
-                print "Initial larger s scan point from local results db."
+                print("Initial larger s scan point from local results db.")
             else:
                 init_source_point = global_scan_points[0]
                 init_source = self.global_results
-                print "Initial larger s scan point from global results db."
+                print("Initial larger s scan point from global results db.")
 
             init_scan_point_id = init_source_point[0]
+            if debug:
+                print ("INIT-CALCULATION: init_scan_point_id", init_scan_point_id)
             init_s_step = init_source_point[1] - self.s
+            if debug:
+                print ("INIT-CALCULATION: init_s_ster", init_s_step)
             with init_source:
                 self.atoms = init_source.extract_atoms_object(init_scan_point_id)
                 if self.atoms is None:
@@ -227,20 +237,31 @@ class Descend_tip_task(Abstract_task):
                 if not scan_points:
                     raise Exception("Could not find suitable initial scan point from the results databases.")
                 init_source = self.global_results
-                print "Initial translated scan point from global results db."
+                print("Initial translated scan point from global results db.")
             else:
                 init_source = self.results
-                print "Initial translated scan point from local results db."
+                print("Initial translated scan point from local results db.")
+            if debug:
+                print ("scan_points", scan_points)
             init_scan_point = scan_points[-1]
+            if debug:
+                print ("init_scan_point", init_scan_point)
             init_scan_point_id = init_scan_point[0]
+            if debug:
+                print ("init_scan_point_id", init_scan_point_id)
             init_s = init_scan_point[1]
+            if debug:
+                print ("init_s", init_s)
             if init_s < self.s:
                 raise Exception("Could not find suitable initial scan point from the results databases.")
             tip_translation = (self.x, self.y)    
             with init_source:
                 self.atoms = init_source.extract_atoms_object(init_scan_point_id)
                 if self.atoms is None:
-                    raise Exception("Could not obtain initial atoms object from the results database.")
+                    print ("==== something went wrong, so we are trying to get data from database with None id ==== ")
+                    self.atoms = init_source.extract_atoms_object(None)
+                    if self.atoms is None:
+                        raise Exception("Could not obtain initial atoms object from the results database.")
                 self.tip_atom_inds = init_source.get_model_part_atom_ids("tip")
                 self.sample_atom_inds = init_source.get_model_part_atom_ids("sample")
                 self.translate_tip(tip_translation)
@@ -301,8 +322,8 @@ class Descend_tip_task(Abstract_task):
 
 class Tune_bias_task(Abstract_task):
     def __init__(self, x, y, s, V, V_start, V_end, V_step, result_db_file,
-                global_res_db_file, state = global_const.state_planned, slurm_id = None):
-        Abstract_task.__init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id)
+                global_res_db_file, state = global_const.state_planned, slurm_id = None, kpts=False):
+        Abstract_task.__init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=kpts)
         self.task_type = global_const.task_tune_bias
         self.V_start = V_start
         self.V_end = V_end
@@ -312,7 +333,7 @@ class Tune_bias_task(Abstract_task):
     def init_calculation(self, task_name, project_path, worker_path):
         Abstract_task.init_calculation(self, task_name, project_path, worker_path)
         
-        wfn_file_name = self.task_name + global_const.cp2k_wfn_suffix
+        wfn_file_name = self.task_name + global_const.cp2k_wfn_suffix(kpts=self.kpts)
         
         if abs(self.V-self.V_start) < eps:
             with self.results:

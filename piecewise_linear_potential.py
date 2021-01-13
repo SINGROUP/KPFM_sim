@@ -15,12 +15,12 @@ gaussian_blur_stdev = 0.2 # Å
 def create_linear_pot_cube(cube_file, linear_dim_upper_bottom, linear_dim_lower_top, V_bias, cell_vectors,
                             cutoff, linear_dim, extended_fft_lengths=False, pbc=False):
     # Initialize CP2k grid
-    print '- Initializing grid:'
+    print('- Initializing grid:')
     n_grid, grid_vectors, pot_on_grid = init_grid_(cell_vectors, cutoff, extended_fft_lengths)
     
     # Calculate the values of the potential at each point (assuming that the cell vector in
     # linear potential dimension is parallel to one of the Cartesian axes)
-    print '- Calculating potential values on grid'
+    print('- Calculating potential values on grid')
     for i_linear_dim in range(n_grid[linear_dim]):
         pos_linear_dim = i_linear_dim*grid_vectors[linear_dim, linear_dim]
         
@@ -49,7 +49,7 @@ def create_linear_pot_cube(cube_file, linear_dim_upper_bottom, linear_dim_lower_
                 #else:
                     #pot_on_grid[ix, iy, iz] = (position[linear_dim]-linear_dim_lower_top)/(linear_dim_upper_bottom-linear_dim_lower_top) * V_bias
     
-    print '- Gaussian blurring the potential'
+    print('- Gaussian blurring the potential')
     # Gaussian blur to round the derivative discontinuity of the piecewise linear potential
     dgrid = np.sqrt(grid_vectors[linear_dim, :].dot(grid_vectors[linear_dim, :]))
     normalized_gaussian_sigma = gaussian_blur_stdev/dgrid
@@ -60,7 +60,7 @@ def create_linear_pot_cube(cube_file, linear_dim_upper_bottom, linear_dim_lower_
     pot_on_grid = gaussian_filter1d(pot_on_grid, normalized_gaussian_sigma, axis=linear_dim, mode=blur_mode, truncate=6.0)
     
     # Write to cube file
-    print '- Writing potential to cube file: {}'.format(cube_file)
+    print('- Writing potential to cube file: {}'.format(cube_file))
     pot_on_grid = pot_on_grid*eV_to_au
     cube_writer.write_cube_nonorthogonal(cube_file, n_grid, grid_vectors, pot_on_grid, np.array([0.0, 0.0, 0.0]),
                                         comment_line='CP2k external electrostatic potential')

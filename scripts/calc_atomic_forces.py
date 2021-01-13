@@ -37,7 +37,7 @@ with results:
         scan_point_id = scan_point[0]
         s = scan_point[1]
         V = scan_point[2]
-        print "Calculating atomic forces for scan point {}".format(scan_point_id)
+        print("Calculating atomic forces for scan point {}".format(scan_point_id))
         atoms = results.extract_atoms_object(scan_point_id)
         results.extract_wf_data(scan_point_id, wfn_file_name, project_path)
         cp2k_initializer = CP2k_init(project_name, atoms)

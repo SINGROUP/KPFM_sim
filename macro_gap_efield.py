@@ -19,22 +19,22 @@ def calc_macro_gap_efield(s, result_db):
     id_higher = higher_s_point[0]
     s_higher = higher_s_point[1]
     
-    print "s = {}, s_lower = {}, s_higher = {}\n".format(s, s_lower, s_higher)
+    print("s = {}, s_lower = {}, s_higher = {}\n".format(s, s_lower, s_higher))
     
     with result_db:
         rs, zs, V_lower = result_db.get_external_potential(id_lower)
         rs, zs, V_higher = result_db.get_external_potential(id_higher)
     
-    print "V_lower = "
-    print V_lower
-    print "V_higher = "
-    print V_higher
+    print("V_lower = ")
+    print(V_lower)
+    print("V_higher = ")
+    print(V_higher)
     
     pot = s_interp.interpolate_2d(V_lower, V_higher, s, s_lower, s_higher)
     
-    print "Potential interpolated with respect to s:"
-    print pot
-    print ""
+    print("Potential interpolated with respect to s:")
+    print(pot)
+    print("")
     
     gap_z_values = zs[(zs > 0.0) & (zs < s)]
     gap_pot_values = pot[0, (zs > 0.0) & (zs < s)]

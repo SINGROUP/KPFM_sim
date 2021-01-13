@@ -26,10 +26,10 @@ with result_db:
     scan_points = result_db.get_all_V_scan_points(x_tip, y_tip, s_tip)
     if not is_V_range:
         for scan_point in scan_points:
-            print "Deleting scan point {} (V={})".format(scan_point[0], scan_point[1])
+            print("Deleting scan point {} (V={})".format(scan_point[0], scan_point[1]))
             result_db.delete_scan_point(scan_point[0])
     else:
         for scan_point in scan_points:
             if (scan_point[1] >= V_min) and (scan_point[1] <= V_max):
-                print "Deleting scan point {} (V={})".format(scan_point[0], scan_point[1])
+                print("Deleting scan point {} (V={})".format(scan_point[0], scan_point[1]))
                 result_db.delete_scan_point(scan_point[0])

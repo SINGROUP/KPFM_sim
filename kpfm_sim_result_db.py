@@ -10,6 +10,8 @@ from ase.constraints import FixAtoms
 eps = 1.0e-13
 bigeps = 1.0e-6
 
+debug = True
+
 # Class for storing the results of a KPFM simulation to a database and
 # extracting the results from there.
 class Result_db(object):
@@ -20,14 +22,14 @@ class Result_db(object):
             self.db_con = self.open_db()
             self.create_tables()
         except sqlite3.Error as e:
-            print "An error occurred:", e.args[0]
+            print("An error occurred:", e.args[0])
         finally:
             self.close_db()
-        print "Initialized result database \'{}\'.".format(filename)
+        print("Initialized result database \'{}\'.".format(filename))
 
 
     def __del__(self):
-        print "Closed result database connection and deleted database object."
+        print("Closed result database connection and deleted database object.")
         self.close_db()
 
 
@@ -101,7 +103,8 @@ class Result_db(object):
                     (x-eps, x+eps, y-eps, y+eps, s-eps, s+eps, V-bigeps, V+bigeps))
         row = cur.fetchone()
         if row is None:
-            return None
+            return None # change here maybe !
+            #return 1
         else:
             return row[0]
 
@@ -336,7 +339,8 @@ class Result_db(object):
             self.db_con.commit()
             return cur.lastrowid
         else:
-            return None
+            #return None # change here!
+            return 1
 
 
     # wf_filename points to the file where the state information is located.
@@ -460,7 +464,7 @@ class Result_db(object):
                 try:
                     shutil.copy(wf_path, wf_filename)
                 except IOError:
-                    print "***\nwf_path entry for scan point {} points to non-existent file\n***".format(scan_point_id)
+                    print("***\nwf_path entry for scan point {} points to non-existent file\n***".format(scan_point_id))
                     return False
                 return True
             else:
@@ -484,10 +488,20 @@ class Result_db(object):
 
     def extract_atoms_object(self, scan_point_id, get_charges = False):
         cur = self.db_con.cursor()
-        cur.execute("SELECT atom_id, x, y, z, atom_type, is_fixed, mulliken_charge "
-                    "FROM atomic_geometry "
-                    "JOIN atoms ON atomic_geometry.atom_id=atoms.id "
-                    "WHERE scan_point_id=? ORDER BY atom_id", (scan_point_id,))
+        if debug:
+           print ("cur:", cur)
+        if scan_point_id is not None:
+            cur.execute("SELECT atom_id, x, y, z, atom_type, is_fixed, mulliken_charge "
+                        "FROM atomic_geometry "
+                        "JOIN atoms ON atomic_geometry.atom_id=atoms.id "
+                        "WHERE scan_point_id=? ORDER BY atom_id", (scan_point_id,))
+        else:
+            cur.execute("SELECT atom_id, x, y, z, atom_type, is_fixed, mulliken_charge "
+                        "FROM atomic_geometry "
+                        "JOIN atoms ON atomic_geometry.atom_id=atoms.id "
+                        "ORDER BY atom_id") #, (scan_point_id,))
+        if debug:
+            print ("after 1st execution")
         positions = []
         atom_types = []
         fixed_atom_inds = []
@@ -498,16 +512,35 @@ class Result_db(object):
             if row["is_fixed"]:
                 fixed_atom_inds.append(row["atom_id"])
             charges.append(row["mulliken_charge"])
+        if debug:
+            print ("after positions and atom_types_appending:")
+            print ("positions:", positions)
+            print ("atom_types:", atom_types)
         if atom_types:
             atoms_model = Atoms(symbols=atom_types, positions=positions, charges=charges)
+            if debug:
+                 print ("atoms_model:", atoms_model)
         else:
+            if debug:
+                 print ("it is going to return None")
             return None
         
-        cur.execute("SELECT a, b, c, periodic_in_x, periodic_in_y, periodic_in_z\
-                    FROM unit_cell\
-                    JOIN periodicity\
-                    ON unit_cell.periodicity_id=periodicity.id\
-                    WHERE scan_point_id=?", (scan_point_id,))
+        if debug:
+            print ("before 2nd execution")
+        if scan_point_id is not None:
+            cur.execute("SELECT a, b, c, periodic_in_x, periodic_in_y, periodic_in_z\
+                         FROM unit_cell\
+                         JOIN periodicity\
+                         ON unit_cell.periodicity_id=periodicity.id\
+                         WHERE scan_point_id=?", (scan_point_id,))
+        else:
+            cur.execute("SELECT a, b, c, periodic_in_x, periodic_in_y, periodic_in_z\
+                         FROM unit_cell\
+                         JOIN periodicity\
+                         ON unit_cell.periodicity_id=periodicity.id")
+           
+        if debug:
+            print ("after 2nd execution")
         row = cur.fetchone()
         atoms_model.set_cell([row["a"], row["b"], row["c"]])
         atoms_model.set_pbc([row["periodic_in_x"], row["periodic_in_y"],
@@ -515,6 +548,9 @@ class Result_db(object):
         fix_bulk = FixAtoms(fixed_atom_inds)
         atoms_model.set_constraint(fix_bulk)
         
+        if debug:
+            print ("atoms_model:", atoms_model)
+            print ("atoms_model.get_global_number_of_atoms():", atoms_model.get_global_number_of_atoms())
         if get_charges:
             return atoms_model, charges
         else:
@@ -544,7 +580,7 @@ class Result_db(object):
             try:
                 os.remove(row["wf_path"])
             except OSError:
-                print "***\nwf_path entry for scan point {} pointed to non-existent file\n***".format(scan_point_id)
+                print("***\nwf_path entry for scan point {} pointed to non-existent file\n***".format(scan_point_id))
             cur.execute("DELETE FROM wf_data_path WHERE scan_point_id=?",
                         (scan_point_id,))
         self.db_con.commit()

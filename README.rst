@@ -13,16 +13,22 @@ These tools expect you to set up your atomic configuration using Atomic Simulati
 Requirements
 ------------
 
-- Python 2.7
+- Python 3.x  (originally Python 2.7)
 - Cython (`http://cython.org/ <http://cython.org/>`_)
 - NumPy
 - SciPy
 - Atomic Simulation Environment (ASE), `https://wiki.fysik.dtu.dk/ase/ <https://wiki.fysik.dtu.dk/ase/>`_
-- `CP2k_tools <>`_
-- `PyDFTFileIO <>`_
+- `CP2k_mtools <https://github.com/SINGROUP/CP2k_mtools> `_ (python base)
+- `DFT_gridIO <https://github.com/SINGROUP/DFT_gridIO>`_ (python base)
 
 For calculating electrostatic potential:
-`KPFM_FEM_tools <>`_
+`KPFM_FEM_tools <https://github.com/SINGROUP/KPFM_FEM>`_ (python base)
+
+
+WIKI
+____
+
+Newest description, installation guide and examples for running in the under development `wiki pages <https://github.com/SINGROUP/KPFM_sim/wiki>`_
 
 Installation
 ------------
@@ -102,6 +108,9 @@ The Result_db class defined in kpfm_sim_result_db module contains many methods f
 
 Author
 ------
+Ondrej Krejci (2021)
+`ondrej.krejci@aalto.fi <mailto:ondrej.krejci@aalto.fi>`
+
 Juha Ritala (2016)
 `jritala@gmail.com <mailto:jritala@gmail.com>`_
 

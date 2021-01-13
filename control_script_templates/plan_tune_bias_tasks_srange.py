@@ -38,7 +38,7 @@ elif init_db == "global":
         with local_results:
             local_results.copy_atoms_data(global_res_db_file)
 else:
-    print "init_db input can be either \'local\' or \'global\'!"
+    print("init_db input can be either \'local\' or \'global\'!")
     sys.exit(2)
 
 with results:

@@ -115,13 +115,13 @@ with sqlite3.connect(result_db_file) as result_db_con:
     with sqlite3.connect(pot_db_file) as pot_db_con:
         pot_db_con.row_factory = sqlite3.Row
         create_macro_parameters(pot_db_con, result_db_con)
-        print "Macro parameters created"
+        print("Macro parameters created")
         create_macro_scan_points(pot_db_con, result_db_con)
-        print "Macro scan points created"
+        print("Macro scan points created")
         copy_capacitance(pot_db_con, result_db_con)
-        print "Capacitance data copied"
+        print("Capacitance data copied")
         copy_potential(pot_db_con, result_db_con)
-        print "Potential data copied"
+        print("Potential data copied")
         
     #cur.execute("ATTACH DATABASE '{}' AS 'pot_db'".format(pot_db_file))
     #cur.execute("INSERT INTO potential SELECT * FROM pot_db.potential")

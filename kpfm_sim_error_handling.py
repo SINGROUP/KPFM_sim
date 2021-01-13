@@ -12,15 +12,15 @@ time_limit_cause = "time_limit"
 
 
 def cp2k_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db):
-    print "***\ncp2k_error_handling was called\n***"
+    print("***\ncp2k_error_handling was called\n***")
     common_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
     
-    print "***\nCP2k calculation failed.\n***"
+    print("***\nCP2k calculation failed.\n***")
     sys.exit(0)
 
 
 def task_termination_handling(slurm_id, project_path, task_db_file):
-    print "***\ntask_termination_handling was called\n***"
+    print("***\ntask_termination_handling was called\n***")
     try:
         task_id, task_name = read_task_info()
     except IOError:
@@ -36,7 +36,7 @@ def task_termination_handling(slurm_id, project_path, task_db_file):
     
     common_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
         
-    print "***\nTask was terminated.\n***"
+    print("***\nTask was terminated.\n***")
     sys.exit(0)
 
 
@@ -50,17 +50,17 @@ def common_error_handling(task_id, task_name, slurm_id, project_path, worker_pat
             else:
                 task_db.update_task_state(task_id, "stopped ({})".format(termination_cause))
     except:
-        print "Error in updating the task state in error handling"
+        print("Error in updating the task state in error handling")
     
     lsdir = os.listdir('.')
     for elem in lsdir:
-        print elem
+        print(elem)
     
     try:
         restart_data_path = os.path.join(worker_path, repr(slurm_id))
         os.mkdir(restart_data_path)
     except OSError:
-        print "***\nCould not make directory for restart data to {}.\n***".format(restart_data_path)
+        print("***\nCould not make directory for restart data to {}.\n***".format(restart_data_path))
         sys.exit(1)
     
     try:
@@ -68,9 +68,9 @@ def common_error_handling(task_id, task_name, slurm_id, project_path, worker_pat
                     restart_data_path)
         shutil.copy(task_name + global_const.cp2k_out_suffix,
                     restart_data_path)
-        print "\nInput and output files saved to {}\n".format(restart_data_path)
+        print("\nInput and output files saved to {}\n".format(restart_data_path))
     except IOError:
-        print "***\nError when copying output file.\n***"
+        print("***\nError when copying output file.\n***")
         sys.exit(1)
     
     try:
@@ -78,9 +78,9 @@ def common_error_handling(task_id, task_name, slurm_id, project_path, worker_pat
                     restart_data_path)
         shutil.copy(task_name + global_const.cp2k_wfn_suffix,
                     restart_data_path)
-        print "\nRestart files saved to {}\n".format(restart_data_path)
+        print("\nRestart files saved to {}\n".format(restart_data_path))
     except IOError:
-        print "***\nError when copying restart files.\n***"
+        print("***\nError when copying restart files.\n***")
         sys.exit(1)
 
 

@@ -121,10 +121,10 @@ result_db = Result_db(result_db_file)
 
 if V_min is None:
     Vs = get_V_values(result_db, x_tip, y_tip, s_min, s_max)
-    print Vs
+    print(Vs)
 else:
     Vs = np.arange(V_min, V_max+eps, V_step)
-    print Vs
+    print(Vs)
 
 forces_list = []
 smooth_forces_list = []
@@ -162,8 +162,8 @@ if use_atomic_forces:
     plt.plot(ss, 1.0e12*slopes, 's-', label="atomic forces")
     plt.plot(ss, 1.0e12*slopes_smooth, 'o-', label="a forces smoothed")
 plt.plot(ss, 1.0e12*slopes_grad, 'x-', label="energy gradient")
-plt.xlabel(u"Macroscopic tip-sample distance, s (Å)", size=16)
-plt.ylabel(u"Force slope (pN/V)", size=16)
+plt.xlabel("Macroscopic tip-sample distance, s (Å)", size=16)
+plt.ylabel("Force slope (pN/V)", size=16)
 plt.legend()
 
 plt.figure(figsize=(10,6))
@@ -172,8 +172,8 @@ for i,V in enumerate(Vs):
 plt.gca().set_color_cycle(None)
 for i,V in enumerate(Vs):    
     plt.plot(ss_interp, energy_interp_array[i,:], '-', label="{:.1f} V, fit".format(V))
-plt.xlabel(u"Macroscopic tip-sample distance, s (Å)", size=16)
-plt.ylabel(u"Energy (eV)", size=16)
+plt.xlabel("Macroscopic tip-sample distance, s (Å)", size=16)
+plt.ylabel("Energy (eV)", size=16)
 plt.subplots_adjust(right=0.8)
 plt.legend(bbox_to_anchor=(1.02, 1), loc=2, borderaxespad=0.)
 
@@ -200,25 +200,25 @@ for i,V in enumerate(Vs):
     else:
         plt.plot(ss, 1.0e12*force_grad_array[i,:], 'o--', label="{:.1f} V, grad".format(V))
 
-plt.title(u"Force vs. s for different biases", size=16)
-plt.xlabel(u"Macroscopic tip-sample distance, s (Å)", size=16)
-plt.ylabel(u"Force (pN)", size=16)
+plt.title("Force vs. s for different biases", size=16)
+plt.xlabel("Macroscopic tip-sample distance, s (Å)", size=16)
+plt.ylabel("Force (pN)", size=16)
 plt.subplots_adjust(right=0.75)
 plt.legend(bbox_to_anchor=(1.02, 1), loc=2, borderaxespad=0.)
 
 plt.figure(figsize=(10,6))
 for i,s in enumerate(ss):
-    plt.plot(Vs, 1.0e12*force_grad_array[:,i], 's', label=u"{:.2f} Å".format(s))
+    plt.plot(Vs, 1.0e12*force_grad_array[:,i], 's', label="{:.2f} Å".format(s))
 plt.gca().set_color_cycle(None)
 for i,s in enumerate(ss):
     force_vs_V_fit, force_vs_V_cov = np.polyfit(Vs, force_grad_array[:,i], 2, cov=True)
     force_vs_V_poly = np.poly1d(force_vs_V_fit)
     poly_Vs = np.linspace(Vs[0], Vs[-1], 100)
     force_vs_V_poly_values = force_vs_V_poly(poly_Vs)
-    plt.plot(poly_Vs, 1.0e12*force_vs_V_poly_values, '-', label=u"{:.2f} Å, fit".format(s))
-plt.title(u"Force vs. V for different s, with quadratic fit", size=16)
-plt.xlabel(u"Bias voltage (V)", size=16)
-plt.ylabel(u"Force (pN)", size=16)
+    plt.plot(poly_Vs, 1.0e12*force_vs_V_poly_values, '-', label="{:.2f} Å, fit".format(s))
+plt.title("Force vs. V for different s, with quadratic fit", size=16)
+plt.xlabel("Bias voltage (V)", size=16)
+plt.ylabel("Force (pN)", size=16)
 plt.subplots_adjust(right=0.75)
 plt.legend(bbox_to_anchor=(1.02, 1), loc=2, borderaxespad=0.)
 

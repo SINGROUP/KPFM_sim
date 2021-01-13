@@ -20,6 +20,6 @@ with sqlite3.connect(result_db_file) as result_db_con:
     cur.execute("CREATE TABLE IF NOT EXISTS sim_parameters(key TEXT, value TEXT)")
     result_db_con.commit()
     
-    for key, value in parameters.iteritems():
+    for key, value in parameters.items():
         cur.execute("INSERT INTO sim_parameters VALUES(?, ?)", (key, value))
     result_db_con.commit()

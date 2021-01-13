@@ -5,7 +5,7 @@ import sys
 import numpy as np
 from scipy.interpolate import UnivariateSpline
 import matplotlib.pyplot as plt
-from ase.io.trajectory import PickleTrajectory
+from ase.io.trajectory import Trajectory
 
 from kpfm_sim_result_db import Result_db
 
@@ -78,6 +78,7 @@ def calc_force_curve(result_db, x, y, V):
             scan_point_id = point[0]
             s = point[1]
             atomic_forces = result_db.get_atomic_forces(scan_point_id, tip_top_atoms)
+            print ("debug: atomic_forces", atomic_forces)
             if atomic_forces is not None:
                 ss.append(s)
                 forces.append(np.sum(atomic_forces[:,1])*au_to_N)
@@ -87,12 +88,13 @@ def calc_force_curve(result_db, x, y, V):
 
 
 def extract_geometry_traj(result_db, traj_file, x, y, V):
-    traj = PickleTrajectory(traj_file, "w")
+    traj = Trajectory(traj_file, "w")
     with result_db:
         scan_points = result_db.get_all_s_scan_points(x, y, V)
         for point in scan_points:
             atoms = result_db.extract_atoms_object(point[0])
             traj.write(atoms)
+            #write(traj_file, atoms)
     traj.close()
 
 
@@ -123,13 +125,13 @@ np.savetxt("force_x{}_y{}.txt".format(x_tip, y_tip), force_array_2)
 
 plt.plot(ss_1, energies, 'bs-', energy_interp_data[:,0], energy_interp_data[:,1], 'ro-')
 plt.legend(['data points', 'smoothing spline'])
-plt.xlabel(u"Macroscopic tip-sample distance, s (Å)", size=16)
-plt.ylabel(u"Energy (eV)", size=16)
+plt.xlabel("Macroscopic tip-sample distance, s (Å)", size=16)
+plt.ylabel("Energy (eV)", size=16)
 plt.show()
 plt.plot(ss_1, 1.0e12*forces_1, 'bs-', ss_2, 1.0e12*forces_2, 'ro-')
 plt.legend(['derivative of energy', 'sum of atomic forces'])
-plt.xlabel(u"Macroscopic tip-sample distance, s (Å)", size=16)
-plt.ylabel(u"Force (pN)", size=16)
+plt.xlabel("Macroscopic tip-sample distance, s (Å)", size=16)
+plt.ylabel("Force (pN)", size=16)
 plt.show()
 #plt.plot(ss_1[2:-2], dforces_1, 'bs-', ss_2[1:-1], dforces_2, 'ro-')
 #plt.show()

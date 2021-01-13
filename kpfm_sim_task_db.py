@@ -11,19 +11,19 @@ eps = 1.0e-13
 # in a batch job later.
 class Task_control_db(object):
     def __init__(self, filename):
-        print "Initializing task database"
+        print("Initializing task database")
         self.db_filename = filename
         try:
             self.db_con = self.open_db()
             self.create_tables()
         except sqlite3.Error as e:
-            print "An error occurred:", e.args[0]
+            print("An error occurred:", e.args[0])
         finally:
             self.close_db()
         
         
     def __del__(self):
-        print "Closing task database connection and deleting database object."
+        print("Closing task database connection and deleting database object.")
         self.close_db()
 
 
@@ -98,7 +98,7 @@ class Task_control_db(object):
                     (task_id, slurm_id, slurm_output,
                     cp2k_output, cp2k_restart, wf_data))
         self.db_con.commit()
-        print "Wrote task data to database."
+        print("Wrote task data to database.")
 
 
     def move_task_to_completed(self, task_id):

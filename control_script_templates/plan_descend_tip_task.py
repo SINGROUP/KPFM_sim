@@ -3,18 +3,22 @@
 
 import os, sys
 
+#from KPFM_sim.kpfm_sim_tasks import Descend_tip_task
+#from KPFM_sim.kpfm_sim_task_db import Task_control_db
+#from KPFM_sim.kpfm_sim_result_db import Result_db
 from kpfm_sim_tasks import Descend_tip_task
 from kpfm_sim_task_db import Task_control_db
 from kpfm_sim_result_db import Result_db
 
-a_nacl = 5.73
-x = 0.0#0.5*a_nacl
+#a_nacl = 5.73
+x = 0.0 #0.5*a_nacl
 y = 0.0
-s = 18.9
+s = 6.0
 V = 0.0
-s_start = 18.9
-s_end = 18.0
+s_start = 4.4
+s_end = 3.0
 s_step = 0.1
+kpts = False
 
 if len(sys.argv) == 4:
     task_db_file = sys.argv[1]
@@ -28,7 +32,13 @@ if not os.path.isfile(result_db_file):
     with local_results:
         local_results.copy_atoms_data(global_res_db_file)
 
-new_task = Descend_tip_task(x, y, s, V, s_start, s_end, s_step, result_db_file, global_res_db_file)
+"""
+class Descend_tip_task(Abstract_task):
+    def __init__(self, x, y, s, V, s_start, s_end, s_step, result_db_file,
+                    global_res_db_file, state = global_const.state_planned, slurm_id = None):
+"""
+
+new_task = Descend_tip_task(x, y, s, V, s_start, s_end, s_step, result_db_file, global_res_db_file, kpts=kpts)
 
 task_db = Task_control_db(task_db_file)
 with task_db:

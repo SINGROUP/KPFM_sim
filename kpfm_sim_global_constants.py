@@ -1,7 +1,7 @@
 # coding: utf-8
 
 cp2k_xyz_suffix = "-pos-1.xyz"
-cp2k_wfn_suffix = "-RESTART.wfn"
+#cp2k_wfn_suffix = "-RESTART.wfn"
 cp2k_restart_suffix = "-1.restart"
 cp2k_input_suffix = ".inp"
 cp2k_out_suffix = ".out"
@@ -20,3 +20,7 @@ wfn_storage_prefix = "scan_point-"
 wfn_storage_folder = "wfn_data"
 
 use_uniform_efield = False
+
+def cp2k_wfn_suffix(kpts=False):
+    out = "-RESTART.wfn" if not kpts else "-RESTART.kp"
+    return out;

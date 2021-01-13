@@ -25,8 +25,8 @@ with from_db:
             energy = scan_point[5]
             if to_db.get_scan_point_id(x, y, s, V) is None:
                 to_id = to_db.write_scan_point(x, y, s, V, energy)
-                print "Copying scan point {} from {} to scan point {} in {}".format(from_id,
-                    from_db_file, to_id, to_db_file)
+                print("Copying scan point {} from {} to scan point {} in {}".format(from_id,
+                    from_db_file, to_id, to_db_file))
                     
                 atoms, charges = from_db.extract_atoms_object(from_id, get_charges=True)
                 forces = from_db.get_atomic_forces(from_id)
