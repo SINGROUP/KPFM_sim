@@ -1,6 +1,6 @@
-================
+=====================
 KPFM simulation tools
-================
+=====================
 Description
 -----------
 
@@ -26,7 +26,7 @@ For calculating electrostatic potential:
 
 
 WIKI
-____
+----
 
 Newest description, installation guide and examples for running in the under development `wiki pages <https://github.com/SINGROUP/KPFM_sim/wiki>`_
 
