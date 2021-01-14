@@ -109,7 +109,7 @@ The Result_db class defined in kpfm_sim_result_db module contains many methods f
 Author
 ------
 Ondrej Krejci (2021)
-`ondrej.krejci@aalto.fi <mailto:ondrej.krejci@aalto.fi>`
+`ondrej.krejci@aalto.fi <mailto:ondrej.krejci@aalto.fi>`_
 
 Juha Ritala (2016)
 `jritala@gmail.com <mailto:jritala@gmail.com>`_
