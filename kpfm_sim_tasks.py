@@ -14,15 +14,17 @@ import kpfm_sim_global_constants as global_const
 
 eps = 1.0e-13
 
+nd = 6# number of digits for rounding
+
 debug = True
 
 class Abstract_task(object, metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=False):
-        self.x = x
-        self.y = y
-        self.s = s
-        self.V = V
+        self.x = round(x,nd)
+        self.y = round(y,nd)
+        self.s = round(s,nd)
+        self.V = round(V,nd)
         self.result_db_file = result_db_file
         self.global_res_db_file = global_res_db_file
         self.state = state
@@ -142,11 +144,13 @@ class Abstract_task(object, metaclass=ABCMeta):
 class Descend_tip_task(Abstract_task):
     def __init__(self, x, y, s, V, s_start, s_end, s_step, result_db_file,
                 global_res_db_file, state = global_const.state_planned, slurm_id = None, kpts=False):
+        if debug:
+            print("debug: x,",x,"y",y,"s",s,"V",V,"s_start",s_start,"s_end",s_end,"s_step","s_step")
         Abstract_task.__init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=kpts)
         self.task_type = global_const.task_descend_tip
-        self.s_start = s_start
-        self.s_end = s_end
-        self.s_step = s_step
+        self.s_start = round(s_start,nd)
+        self.s_end = round(s_end,nd)
+        self.s_step = round(s_step,nd)
 
 
     # Move tip down
@@ -164,6 +168,20 @@ class Descend_tip_task(Abstract_task):
             if atom.index in self.sample_atom_inds:
                 atom.position[0] = atom.position[0] + translation_vec[0]
                 atom.position[2] = atom.position[2] + translation_vec[1]
+
+
+    # Translate tip in z (y) axis according to the s_start
+    def start_tip(self):
+        if debug:
+            print("debug in start_tip; self.s",self.s,"self.s_start",self.s_start,"s_start-s =",self.s_start-self.s)
+        if self.s != self.s_start:
+            print("s_start differs from s, moving the tip according to s_start")
+            for atom in self.atoms:
+                if atom.index in self.tip_atom_inds:
+                    atom.position[1] = atom.position[1] + self.s_start-self.s
+            self.s=self.s_start
+        if debug:
+            print("debug tip atoms adjusted")
 
 
     # Get the initial atomic model from the results database and move the tip
@@ -196,7 +214,7 @@ class Descend_tip_task(Abstract_task):
             init_scan_point_id = init_source_point[0]
             if debug:
                 print ("INIT-CALCULATION: init_scan_point_id", init_scan_point_id)
-            init_s_step = init_source_point[1] - self.s
+            init_s_step = round(init_source_point[1] - self.s,nd)
             if debug:
                 print ("INIT-CALCULATION: init_s_ster", init_s_step)
             with init_source:
@@ -206,6 +224,7 @@ class Descend_tip_task(Abstract_task):
                 self.tip_atom_inds = init_source.get_model_part_atom_ids("tip")
                 self.sample_atom_inds = init_source.get_model_part_atom_ids("sample")
                 init_source.extract_wf_data(init_scan_point_id, wfn_file_name, self.project_path)
+                #self.start_tip() moved to run_task.py
                 self.descend_tip(init_s_step)
             
         elif abs(self.V) > eps:
@@ -294,7 +313,7 @@ class Descend_tip_task(Abstract_task):
         if self.calc_initialized:
             if self.s - self.s_step >= self.s_end-eps:
                 self.descend_tip()
-                self.s = self.s - self.s_step
+                self.s =round( self.s - self.s_step,nd)
                 if abs(self.V) > eps:
                     # Calculate average electric field in the gap of the macroscopic model from
                     # the electrostatic potential
@@ -325,9 +344,9 @@ class Tune_bias_task(Abstract_task):
                 global_res_db_file, state = global_const.state_planned, slurm_id = None, kpts=False):
         Abstract_task.__init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=kpts)
         self.task_type = global_const.task_tune_bias
-        self.V_start = V_start
-        self.V_end = V_end
-        self.V_step = V_step
+        self.V_start = round(V_start,nd)
+        self.V_end = round(V_end,nd)
+        self.V_step = round(V_step,nd)
 
 
     def init_calculation(self, task_name, project_path, worker_path):
@@ -375,14 +394,14 @@ class Tune_bias_task(Abstract_task):
         if self.calc_initialized:
             if self.V_step > 0:
                 if self.V + self.V_step <= self.V_end+eps:
-                    self.V = self.V + self.V_step
+                    self.V = round(self.V + self.V_step,nd)
                     if abs(self.V) > eps:
                         return True
                     else:
                         return self.next_step()
             elif self.V_step < 0:
                 if self.V + self.V_step >= self.V_end-eps:
-                    self.V = self.V + self.V_step
+                    self.V = round(self.V + self.V_step,nd)
                     if abs(self.V) > eps:
                         return True
                     else:
