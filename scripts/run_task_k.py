@@ -20,7 +20,7 @@ debug = True
 
 # Main settings: #
 
-kpts = False # False 
+kpts = True # False 
 
 task_name = "kpfm_task"
 task_types = ["descend_tip"] #, "tune_bias"]

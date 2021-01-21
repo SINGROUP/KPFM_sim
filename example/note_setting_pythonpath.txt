@@ -1,0 +1,10 @@
+#!/bin/bash
+# **************** #
+# before you run the program itself you should prorerly set your PYTHONPATH.
+# e.g. like here bellor or as it is in ...slrm cripts
+# progdir = where all the important directories are
+# you need KPFM_sim, CP2K_mtools & DFT_gridIO (here they are called *3, since they are moved to python3)
+# **************** # 
+progdir=/home/krejcio1/wrkdir/Programs/ana-20.04tf2_py3.7.7
+
+export PYTHONPATH=$PYTHONPATH:$progdir/KPFM_sim3:$progdir/CP2k_mtools3:$progdir/DFT_gridIO3

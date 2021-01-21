@@ -1,0 +1,1 @@
+../../control_script_templates/preopt_vertical_along_y_tip_first_kpts.py

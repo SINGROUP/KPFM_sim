@@ -27,23 +27,23 @@ just_check = False
 # We start with everything in /y/ and NOT periodic only in /y/   #
 
 # Parameters 
-project_name = "small2"
-z_lay_bot = 2.1 # hight of the layers - no needed now 
+project_name = "AFM_try"
+z_lay_bot = 2.1 # hight of the layers
 z_lay_top = z_lay_bot
 no_bot_lay = 1
 no_top_lay = 1
-initial_macro_dist = 10.0-4.0 # the bottom most Cu atom vs. the heighest C atom of C6HxClBr ... #
+initial_macro_dist = 15.94-10.21 # the bottom most Cu atom vs. the heighest C atom of C6HxClBr ... #
 # full_geo_n_cell_file = "geometry-in.in" # first atoms are tip, then sample goes 
-full_geo_file = "input2.xyz" # first atoms are tip, then sample goes 
+full_geo_file = "input.xyz" # first atoms are tip, then sample goes 
 full_cell_file = "input.lvs" # first atoms are tip, then sample goes 
 pbc = [True,False,True]
 n_sample_atoms = 2
-sample_bottom_atoms_file = "bottom_fixed_indices.txt" # NO -1  # //not needed, since already prepared in the "in" file #
-tip_top_atoms_file = "top_fixed_indices.txt" # NO -1  # //not needed, since already prepared in the "in" file #
+sample_bottom_atoms_file = "bottom_fixed_indices.txt" # No -1  # //not needed, since already prepared in the "in" file #
+tip_top_atoms_file = "top_fixed_indices.txt" # No -1  # //not needed, since already prepared in the "in" file #
 
-kpts = False
+kpts = True
 
-db_filename = "small2.db"
+db_filename = "glob_res/opt.db"
 cp2k_output_file = project_name + global_const.cp2k_out_suffix
 result_xyz_file = project_name + global_const.cp2k_xyz_suffix
 result_wfn_file = project_name + global_const.cp2k_wfn_suffix(kpts=kpts)
@@ -61,19 +61,19 @@ V = 0.0
 # sample & getting to know, what is what #
 #atoms = read(full_geo_n_cell_file) #, format='xyz', index=-1) # tip is 1st, then sample
 atoms = read(full_geo_file, format='xyz', index=-1) # tip is 1st, then sample
-cell  = np.genfromtxt('input.lvs')
+cell  = np.genfromtxt(full_cell_file)
 atoms.set_cell(cell)
 n_at  = atoms.get_global_number_of_atoms()
 n_tip_atoms = n_at - n_sample_atoms
 
 tip_top_atom_inds = np.loadtxt(tip_top_atoms_file) if n_tip_atoms > 2 else [ 0 ] # -1 -> human to python logic
-sample_bottom_atom_inds = np.loadtxt(sample_bottom_atoms_file) -1
+sample_bottom_atom_inds = np.loadtxt(sample_bottom_atoms_file) # -1 no need, already by -1
 
-tip_apex_atom_idx = n_tip_atoms - 1 #originally set by /y/, here it is last atom of the tip #
-tip_atom_inds = [i for i in range(n_tip_atoms)]
+tip_apex_atom_idx = n_sample_atoms  #originally set by /y/, here it is lowesr = first atom of the tip #
+tip_atom_inds = [i for i in range(n_sample_atoms,n_at)] # atoms of sample goes as 1st
 
-sample_atom_inds = [i for i in range(n_tip_atoms,n_at)] # bellow ; the top atoms are /y/ above the bottom layer - bottom atom last #
-sample_top_atom_inds = [atom.index for atom in atoms if (atom.position[1] > atoms.get_positions()[n_sample_atoms-1,1]+z_lay_bot*no_bot_lay+0.8 and n_tip_atoms <= natom.index < n_at)]
+sample_atom_inds = [i for i in range(n_sample_atoms)] # bellow ; the top atoms are /y/ above the bottom layer - bottom atom last #
+sample_top_atom_inds = [atom.index for atom in atoms if (atom.position[1] > atoms.get_positions()[n_sample_atoms-1,1]+z_lay_bot*no_bot_lay+0.8 and 0 <= atom.index < n_sample_atoms)]
 
 atoms.set_pbc(pbc)
 

@@ -17,7 +17,7 @@ V = 0.0
 s_start = s
 s_end = 2.95
 s_step = 0.2
-kpts = False
+kpts = True
 
 if len(sys.argv) == 4:
     task_db_file = sys.argv[1]
