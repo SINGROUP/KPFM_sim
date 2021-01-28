@@ -135,6 +135,10 @@ class Abstract_task(object, metaclass=ABCMeta):
             pass
         wfn_storage_file_name = global_const.wfn_storage_prefix + repr(scan_point_id) + \
                                 "_" + os.path.basename(self.worker_path) + global_const.cp2k_wfn_suffix(kpts=self.kpts)
+        if debug:
+            print("debug: wfn_file_name",wfn_file_name)
+            print("debug: wfn_storage_file_name",wfn_storage_file_name)
+            print("debug: self.kpts",self.kpts)
         wfn_storage_path = os.path.join(wfn_storage_base_path, wfn_storage_file_name)
         shutil.copy(wfn_file_name, wfn_storage_path)
         wfn_rel_storage_path = os.path.join(global_const.wfn_storage_folder, wfn_storage_file_name)
@@ -145,12 +149,13 @@ class Descend_tip_task(Abstract_task):
     def __init__(self, x, y, s, V, s_start, s_end, s_step, result_db_file,
                 global_res_db_file, state = global_const.state_planned, slurm_id = None, kpts=False):
         if debug:
-            print("debug: x,",x,"y",y,"s",s,"V",V,"s_start",s_start,"s_end",s_end,"s_step","s_step")
+            print("debug: x,",x,"y",y,"s",s,"V",V,"s_start",s_start,"s_end",s_end,"s_step",s_step)
         Abstract_task.__init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=kpts)
         self.task_type = global_const.task_descend_tip
         self.s_start = round(s_start,nd)
         self.s_end = round(s_end,nd)
         self.s_step = round(s_step,nd)
+        self.kpts = kpts
 
 
     # Move tip down
@@ -162,10 +167,17 @@ class Descend_tip_task(Abstract_task):
                 atom.position[1] = atom.position[1] - s_step
 
 
+    # Translate tip in x-y (x-z) plane # - this was the original procedure:
+    def translate_sample(self, translation_vec):
+        for atom in self.atoms:
+            if atom.index in self.sample_atom_inds:
+                atom.position[0] = atom.position[0] + translation_vec[0]
+                atom.position[2] = atom.position[2] + translation_vec[1]
+
     # Translate tip in x-y (x-z) plane
     def translate_tip(self, translation_vec):
         for atom in self.atoms:
-            if atom.index in self.sample_atom_inds:
+            if atom.index in self.tip_atom_inds:
                 atom.position[0] = atom.position[0] + translation_vec[0]
                 atom.position[2] = atom.position[2] + translation_vec[1]
 
@@ -347,6 +359,7 @@ class Tune_bias_task(Abstract_task):
         self.V_start = round(V_start,nd)
         self.V_end = round(V_end,nd)
         self.V_step = round(V_step,nd)
+        self.kpts = kpts
 
 
     def init_calculation(self, task_name, project_path, worker_path):

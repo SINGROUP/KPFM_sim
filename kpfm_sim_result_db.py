@@ -459,12 +459,22 @@ class Result_db(object):
                 # For backward compatibility
                 if os.path.isabs(wf_rel_path):
                     wf_path = wf_rel_path
+                    if debug: 
+                        print ("debug: row[wf_path]")
                 else:
                     wf_path = os.path.join(project_path, wf_rel_path)
+                    if debug: 
+                        print ("debug: os.path.join(project_path,wf_rel_path)")
+                if debug:
+                    print("debug: wf_path",wf_path)
+                    print("debug: wf_rel_path",wf_rel_path)
+                    print("debug: wf_filename",wf_filename)
                 try:
                     shutil.copy(wf_path, wf_filename)
                 except IOError:
-                    print("***\nwf_path entry for scan point {} points to non-existent file\n***".format(scan_point_id))
+                    print("***\nwf_path entry for scan point {} points to non-existent file \n***".format(scan_point_id))
+                    if debug: 
+                        print ("debug: extract_wf_data 1")
                     return False
                 return True
             else:
@@ -577,10 +587,14 @@ class Result_db(object):
                     (scan_point_id,))
         row = cur.fetchone()
         if row is not None:
+            if debug:
+                print("debug: wf_path",wf_path)
             try:
                 os.remove(row["wf_path"])
             except OSError:
                 print("***\nwf_path entry for scan point {} pointed to non-existent file\n***".format(scan_point_id))
+                if debug:
+                    print("debug: delete_scan_point 2")
             cur.execute("DELETE FROM wf_data_path WHERE scan_point_id=?",
                         (scan_point_id,))
         self.db_con.commit()

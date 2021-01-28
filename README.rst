@@ -18,7 +18,7 @@ Requirements
 - NumPy
 - SciPy
 - Atomic Simulation Environment (ASE), `https://wiki.fysik.dtu.dk/ase/ <https://wiki.fysik.dtu.dk/ase/>`_
-- `CP2k_mtools <https://github.com/SINGROUP/CP2k_mtools> `_ (python base)
+- `CP2k_mtools <https://github.com/SINGROUP/CP2k_mtools>`_ (python base)
 - `DFT_gridIO <https://github.com/SINGROUP/DFT_gridIO>`_ (python base)
 
 For calculating electrostatic potential:

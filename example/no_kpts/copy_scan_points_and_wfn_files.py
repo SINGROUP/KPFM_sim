@@ -1,0 +1,1 @@
+../../scripts/copy_scan_points_and_wfn_files.py

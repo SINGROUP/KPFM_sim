@@ -32,7 +32,7 @@ z_lay_bot = 2.1 # hight of the layers
 z_lay_top = z_lay_bot
 no_bot_lay = 1
 no_top_lay = 1
-initial_macro_dist = 15.94-10.21 # the bottom most Cu atom vs. the heighest C atom of C6HxClBr ... #
+initial_macro_dist = 6.135 # the bottom most Cu atom vs. the heighest C atom of C6HxClBr ... #
 # full_geo_n_cell_file = "geometry-in.in" # first atoms are tip, then sample goes 
 full_geo_file = "input.xyz" # first atoms are tip, then sample goes 
 full_cell_file = "input.lvs" # first atoms are tip, then sample goes 
@@ -42,6 +42,7 @@ sample_bottom_atoms_file = "bottom_fixed_indices.txt" # No -1  # //not needed, s
 tip_top_atoms_file = "top_fixed_indices.txt" # No -1  # //not needed, since already prepared in the "in" file #
 
 kpts = True
+nd = 6# number of digits for rounding
 
 db_filename = "glob_res/opt.db"
 cp2k_output_file = project_name + global_const.cp2k_out_suffix
@@ -67,12 +68,13 @@ n_at  = atoms.get_global_number_of_atoms()
 n_tip_atoms = n_at - n_sample_atoms
 
 tip_top_atom_inds = np.loadtxt(tip_top_atoms_file) if n_tip_atoms > 2 else [ 0 ] # -1 -> human to python logic
-sample_bottom_atom_inds = np.loadtxt(sample_bottom_atoms_file) # -1 no need, already by -1
+sample_bottom_atom_inds = np.loadtxt(sample_bottom_atoms_file) # human logic here
+sample_bottom_atom_inds +=  -1 # human -> python logic 
 
-tip_apex_atom_idx = n_sample_atoms  #originally set by /y/, here it is lowesr = first atom of the tip #
-tip_atom_inds = [i for i in range(n_sample_atoms,n_at)] # atoms of sample goes as 1st
+tip_apex_atom_idx = n_sample_atoms -1  #originally set by /y/, here it is lowesr = last atom of the tip #
+tip_atom_inds = [i for i in range(n_tip_atoms)] # atoms of the tip goes as 1st
 
-sample_atom_inds = [i for i in range(n_sample_atoms)] # bellow ; the top atoms are /y/ above the bottom layer - bottom atom last #
+sample_atom_inds = [i for i in range(n_tip_atoms,n_at)] # bellow ; the top atoms are /y/ above the bottom layer - bottom atom last #
 sample_top_atom_inds = [atom.index for atom in atoms if (atom.position[1] > atoms.get_positions()[n_sample_atoms-1,1]+z_lay_bot*no_bot_lay+0.8 and 0 <= atom.index < n_sample_atoms)]
 
 atoms.set_pbc(pbc)
@@ -191,7 +193,7 @@ for atom_i, atom_role in enumerate(atom_belongs_to):
 results = Result_db(db_filename)
 with results:
     print("debug results:", results)
-    scan_point_id = results.write_scan_point(x, y, s, V, energy)
+    scan_point_id = results.write_scan_point( round(x,nd), round(y,nd), round(s,nd), round(V,nd), energy)
     print ("debug scan_point_id", scan_point_id)
     wfn_storage_file_name = global_const.wfn_storage_prefix + repr(scan_point_id) + \
                                 global_const.cp2k_wfn_suffix(kpts=kpts)

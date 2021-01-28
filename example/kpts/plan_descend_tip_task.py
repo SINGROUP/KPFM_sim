@@ -1,1 +1,1 @@
-../../control_script_templates/plan_descend_tip_task-k.py
+../../control_script_templates/plan_descend_tip_task.py

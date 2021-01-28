@@ -20,9 +20,7 @@ debug = True
 
 # Main settings: #
 
-kpts = False # False 
-
-task_name = "kpfm_task"
+task_name = "afm_task"
 task_types = ["descend_tip"] #, "tune_bias"]
 
 # end basic settings#
@@ -31,6 +29,12 @@ xyz_file_name = task_name + global_const.cp2k_xyz_suffix
 restart_file = task_name + global_const.cp2k_restart_suffix
 output_file = task_name + global_const.cp2k_out_suffix
 default_state_constraint = global_const.state_planned
+kpts = False # False 
+
+if debug:
+    print("debug: sys.argv:", sys.argv, "len(sys.argv)", len(sys.argv))
+
+# setting paths, constrains and k-points:
 
 if len(sys.argv) == 4:
     task_db_file = sys.argv[1]
@@ -39,21 +43,42 @@ if len(sys.argv) == 4:
     task_type_constraint = None
     task_state_constraint = default_state_constraint
 elif len(sys.argv) == 5:
-    task_db_file = sys.argv[1]
-    project_path = sys.argv[2]
-    slurm_id = int(sys.argv[3])
-    task_type_constraint = sys.argv[4]
-    task_state_constraint = default_state_constraint
+    if (sys.argv[1] == "-k") or (sys.argv[1] == "--kpts"):
+        kpts = True
+        task_db_file = sys.argv[2]
+        project_path = sys.argv[3]
+        slurm_id = int(sys.argv[4])
+        task_type_constraint = None
+        task_state_constraint = default_state_constraint
+    else:
+        task_db_file = sys.argv[1]
+        project_path = sys.argv[2]
+        slurm_id = int(sys.argv[3])
+        task_type_constraint = sys.argv[4]
+        task_state_constraint = default_state_constraint
 elif len(sys.argv) == 6:
-    task_db_file = sys.argv[1]
-    project_path = sys.argv[2]
-    slurm_id = int(sys.argv[3])
-    task_type_constraint = sys.argv[4]
+    if (sys.argv[1] == "-k") or (sys.argv[1] == "--kpts"):
+        kpts = True
+        task_db_file = sys.argv[2]
+        project_path = sys.argv[3]
+        slurm_id = int(sys.argv[4])
+        task_type_constraint = sys.argv[5]
+        task_state_constraint = default_state_constraint
+    else:
+        task_db_file = sys.argv[1]
+        project_path = sys.argv[2]
+        slurm_id = int(sys.argv[3])
+        task_type_constraint = sys.argv[4]
+elif len(sys.argv) == 7 and ((sys.argv[1] == "-k") or (sys.argv[1] == "--kpts")) :
+    kpts = True
+    task_db_file = sys.argv[2]
+    project_path = sys.argv[3]
+    slurm_id = int(sys.argv[4])
+    task_type_constraint = sys.argv[5]
     task_state_constraint = sys.argv[5]
 else:
-   sys.exit("Usage: python run_task.py <task_db_file> <project_path> <slurm_id> [type_constraint] [status_constraint]\n" \
+   sys.exit("Usage: python run_task.py (optionally -k or --kpts if k-points are necessary) <task_db_file> <project_path> <slurm_id> [type_constraint] [status_constraint]\n" \
             "Available task types: {}, {}".format(task_types[0], task_types[1]))
-
 
 worker_dir = os.path.dirname(task_db_file)
 worker_path = os.path.join(project_path, worker_dir)
@@ -63,6 +88,7 @@ task_db_path = os.path.join(worker_path, task_db_file)
 task_db = Task_control_db(task_db_path)
 
 if debug: 
+    print("kpts",kpts)
     print("worker_dir  ",worker_dir )
     print("worker_path ",worker_path)
     print("task_db_file",task_db_file)
@@ -150,7 +176,7 @@ while is_steps_left:
         task.update_atoms_object(xyz_file_name)
     except IOError:
         cp2k_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
-    task.write_step_results_to_db("./kpfm_task.out", kpts=kpts)
+    task.write_step_results_to_db( task_name+".out", kpts=kpts)
     #task.write_step_results_to_db(get_output_path(worker_dir,task_name))
     is_steps_left = task.next_step()
     with task_db:

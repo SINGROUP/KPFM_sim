@@ -1,1 +1,1 @@
-../../scripts/run_task_k.py
+../../scripts/run_task.py

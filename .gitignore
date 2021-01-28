@@ -8,6 +8,22 @@
 
 *.c
 
-*.npy
-*.xsf
+# for the example sections:
+*.db
+*.db-bak
 *.png
+*.cube
+*.out
+*.wfn
+*.kp
+*.restart*
+*.Hessian
+*.inp
+energy*
+force*
+geometry*
+worker_*
+wfn_data
+glob_res
+AFM_try*
+opt-*

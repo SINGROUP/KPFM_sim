@@ -1,0 +1,1 @@
+../../scripts/extract_descend_tip_data.py

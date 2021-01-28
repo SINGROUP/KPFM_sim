@@ -11,16 +11,36 @@ from macro_gap_efield import calc_macro_gap_efield
 import kpfm_sim_global_constants as global_const
 
 eps = 1.0e-13
+kpts = False
+erm = "Usage: python calc_atomic_forces.py (optionally -k or --kpts if k-points are necessary) <project_path> <result_db_file> <global_res_db_file>"
+debug = True
 
-project_name = "kpfm_atomic_forces"
-wfn_file_name = project_name + global_const.cp2k_wfn_suffix
+project_name = "afm_atomic_forces"
+
+if debug:
+    print (sys.argv)
 
 if len(sys.argv) == 4:
     project_path = sys.argv[1]
     result_db_file = sys.argv[2]
     global_res_db_file = sys.argv[3]
+elif len(sys.argv) == 5:
+    if (sys.argv[1] == "-k") or (sys.argv[1] == "--kpts"):
+        kpts = True
+    else:
+        print ( "5 arguments but -k or --kpts is not 1st" )
+        sys.exit( erm )
+    project_path = sys.argv[2]
+    result_db_file = sys.argv[3]
+    global_res_db_file = sys.argv[4]
 else:
-    sys.exit("Usage: python calc_atomic_forces.py <project_path> <result_db_file> <global_res_db_file>")
+    sys.exit( erm )
+    
+wfn_file_name = project_name + global_const.cp2k_wfn_suffix(kpts=kpts)
+
+if debug:
+    print ("kpts",kpts)
+    print ("wfn_file_name",wfn_file_name)
 
 worker_dir = os.path.dirname(result_db_file)
 worker_path = os.path.join(project_path, worker_dir)
@@ -59,9 +79,10 @@ with results:
             cp2k_calc = cp2k_initializer.init_calc_forces()
         
         cp2k_calc.run()
-        output = get_output_from_file(cp2k_calc.get_output_path())
+        #output = get_output_from_file(cp2k_calc.get_output_path())
+        output = get_output_from_file(project_name+".out")
         forces = get_forces_from_output(output)
         results.write_atomic_forces(scan_point_id, forces)
         results.write_calc_forces_output(scan_point_id, output)
-        os.remove(cp2k_calc.get_output_path())
+        os.remove(project_name+".out")
         os.remove(wfn_file_name)
