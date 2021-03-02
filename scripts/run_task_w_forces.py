@@ -112,6 +112,7 @@ if task.state == global_const.state_waiting:
     cp2k_restart_exists = task.get_restart_data()
 
 is_steps_left = True
+was_not_shift = True
 
 # If CP2k calculation was terminated before, do a restart
 if cp2k_restart_exists:
@@ -129,7 +130,7 @@ if cp2k_restart_exists:
         task.update_atoms_object(xyz_file_name)
     except IOError:
         cp2k_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
-    task.write_step_results_to_db(cp2k_restart_calc.get_output_path(), kpts=kpts)
+    task.write_step_results_to_db(cp2k_restart_calc.get_output_path(), kpts=kpts, bForces = True)
     is_steps_left = task.next_step()
     with task_db:
         task_db.update_task(task_id, task)
@@ -140,8 +141,9 @@ while is_steps_left:
     # exists in the results database. In that case, skip it.
     if debug:
         print("debug: task.s", task.s, "task.s_start",task.s_start)
-    if task.s != task.s_start :
-        print("shifting to starting point")
+    if (task.s != task.s_start) and was_not_shift :
+        print("shifting to starting point, debug: was_not_shift", was_not_shift )
+        was_not_shift=False;
         task.start_tip()
         continue
     scan_point_exists = task.is_scan_point_in_db()
@@ -176,7 +178,7 @@ while is_steps_left:
         task.update_atoms_object(xyz_file_name)
     except IOError:
         cp2k_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
-    task.write_step_results_to_db( task_name+".out", kpts=kpts)
+    task.write_step_results_to_db( task_name+".out", kpts=kpts, bForces = True)
     #task.write_step_results_to_db(get_output_path(worker_dir,task_name))
     is_steps_left = task.next_step()
     with task_db:

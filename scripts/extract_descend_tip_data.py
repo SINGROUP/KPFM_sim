@@ -91,10 +91,15 @@ def extract_geometry_traj(result_db, traj_file, x, y, V):
     traj = Trajectory(traj_file, "w")
     with result_db:
         scan_points = result_db.get_all_s_scan_points(x, y, V)
+        latoms = []
         for point in scan_points:
             atoms = result_db.extract_atoms_object(point[0])
-            traj.write(atoms)
+            latoms.append(atoms)
+            #traj.write(atoms)
             #write(traj_file, atoms)
+        for atoms in latoms[::-1]:
+            traj.write(atoms)
+    del latoms;
     traj.close()
 
 

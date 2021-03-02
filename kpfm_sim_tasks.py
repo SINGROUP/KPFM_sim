@@ -7,7 +7,7 @@ from ase.io import read
 
 from kpfm_sim_result_db import Result_db
 from cp2k_output_tools import get_output_from_file, get_energy_from_output,\
-                                get_charges_from_output
+                                get_charges_from_output, get_forces_from_output
 from axisym_pot_to_cube import axisym_pot_in_db_to_cube
 from macro_gap_efield import calc_macro_gap_efield
 import kpfm_sim_global_constants as global_const
@@ -96,13 +96,14 @@ class Abstract_task(object, metaclass=ABCMeta):
         os.remove(xyz_file)
 
 
-    def write_step_results_to_db(self, cp2k_output_path, kpts=False):
+    def write_step_results_to_db(self, cp2k_output_path, kpts=False,bForces=False):
         print ("debug: kpts =",kpts,"; self.kpts",self.kpts)
         wfn_file_name = self.task_name + global_const.cp2k_wfn_suffix(kpts=kpts)
         print ("debug: wfn_file_name" , wfn_file_name )
         cp2k_output = get_output_from_file(cp2k_output_path)
         energy = get_energy_from_output(cp2k_output)
         charges = get_charges_from_output(cp2k_output)
+        forces = get_forces_from_output(cp2k_output) if bForces else None
         
         with self.results:
             scan_point_id = self.results.write_scan_point(self.x, self.y, self.s, self.V, energy)
@@ -111,6 +112,8 @@ class Abstract_task(object, metaclass=ABCMeta):
             self.results.write_atomic_geo(scan_point_id, self.atoms, charges)
             self.results.write_unit_cell(scan_point_id, self.atoms)
             self.results.write_output_file(scan_point_id, cp2k_output)
+            if forces is not None:
+                self.results.write_atomic_forces(scan_point_id, forces)
             wfn_rel_storage_path = self.__store_wf_data(scan_point_id, wfn_file_name)
             self.results.write_wf_data_path(scan_point_id, wfn_rel_storage_path)
         
