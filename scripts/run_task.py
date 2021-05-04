@@ -112,6 +112,7 @@ if task.state == global_const.state_waiting:
     cp2k_restart_exists = task.get_restart_data()
 
 is_steps_left = True
+was_not_shift = True
 
 # If CP2k calculation was terminated before, do a restart
 if cp2k_restart_exists:
@@ -140,8 +141,9 @@ while is_steps_left:
     # exists in the results database. In that case, skip it.
     if debug:
         print("debug: task.s", task.s, "task.s_start",task.s_start)
-    if task.s != task.s_start :
-        print("shifting to starting point")
+    if (task.s != task.s_start) and was_not_shift :
+        print("shifting to starting point, debug: was_not_shift", was_not_shift )
+        was_not_shift=False;
         task.start_tip()
         continue
     scan_point_exists = task.is_scan_point_in_db()
@@ -150,7 +152,7 @@ while is_steps_left:
                 "Skipping...".format(task.x, task.y, task.s, task.V))
         is_steps_left = task.next_step()
         continue
-    
+
     # Check which task type was loaded from the database and choose
     # correct CP2k initialization based on that
     cp2k_initializer = CP2k_init(task_name, task.get_atoms_object())

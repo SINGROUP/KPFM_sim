@@ -65,7 +65,7 @@ python3 ../plan_descend_tip_task.py --kpts ./$task_db_file ../$result_file ../gl
 
 trap "python3 $KPFM_GLOBAL_SCRIPTS/call_error_handler.py $SLURM_JOB_ID $ORIG_DIR $TASK_DB_FILE; exit" ERR TERM
 
-python3 ../run_task.py --kpts ./$task_db_file $project_path $slurm_id
+python3 ../run_task_w_forces.py --kpts ./$task_db_file $project_path $slurm_id
 
 echo "Done, done"
 
