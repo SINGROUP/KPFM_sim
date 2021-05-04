@@ -18,9 +18,63 @@ nd = 6# number of digits for rounding
 
 debug = True
 
+def prepare_db_for_task(global_res_db_file, result_db_file, task_db_file):
+    '''
+    prepare_db_for_task(global_res_db_file, result_db_file, task_db_file)
+    adjust the result db file and the task db file with the all/last results from the global results file
+    only the important parts (scan points and geometry) copied
+    '''
+    from_db = Result_db(global_res_db_file)
+    to_db = Result_db(result_db_file)
+    control_db = Result_db(task_db_file)
+    gm = True
+    with from_db:
+        scan_points = from_db.get_all_scan_point_entries()
+        with to_db :
+            with control_db :
+                for scan_point in scan_points:
+                    from_id = scan_point[0]
+                    x = scan_point[1]
+                    y = scan_point[2]
+                    s = scan_point[3]
+                    V = scan_point[4]
+                    energy = scan_point[5]
+                    if to_db.get_scan_point_id(x, y, s, V) is None:
+                        to_id = to_db.write_scan_point(x, y, s, V, energy)
+                        print("Copying scan point {} from {} to scan point {} in {}".format(from_id,
+                            global_res_db_file, to_id, result_db_file))
+                        tmp, charges = from_db.extract_atoms_object(from_id, get_charges=True, get_model=gm);
+                        if gm:
+                            atoms = tmp[0]	
+                            model_part = tmp[1]
+                            is_fixed = tmp[2]
+                            full_model, pos_in_part  = from_db.get_model_part()
+                            #print ("debug: model_part",model_part)
+                            #print ('debug: is_fixed', is_fixed)
+                            #print ('debug: full_model',full_model);
+                            #print ('debug: pos_in_part',pos_in_part);
+                            to_db.write_atoms(atoms, is_fixed, model_part, simplistic = True)
+                            for i in range(len(full_model)):
+                                to_db.write_model_part(full_model[i],pos_in_part[i])
+                            gm = False;
+                        else:
+                            atoms = tmp
+                        #print("debug: atoms",atoms)
+                        #print("debug: atoms.positions", atoms.positions )
+                        to_db.write_atomic_geo(to_id, atoms, charges)
+                        to_db.write_unit_cell(to_id, atoms)
+                    ####
+                    if control_db.get_scan_point_id(x, y, s, V) is None:
+                        control_id = control_db.write_scan_point(x, y, s, V, energy)
+                        print("Copying scan point {} from {} to scan point {} in {}".format(from_id,
+                            global_res_db_file, control_id, task_db_file))
+    print()
+    print("results and tasks db files updated")
+
+
 class Abstract_task(object, metaclass=ABCMeta):
     @abstractmethod
-    def __init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=False):
+    def __init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=False, wfn=True):
         self.x = round(x,nd)
         self.y = round(y,nd)
         self.s = round(s,nd)
@@ -32,6 +86,7 @@ class Abstract_task(object, metaclass=ABCMeta):
         self.calc_initialized = False
         self.E_per_V = None
         self.kpts = kpts
+        self.wfn = wfn
 
 
     @abstractmethod
@@ -150,10 +205,10 @@ class Abstract_task(object, metaclass=ABCMeta):
 
 class Descend_tip_task(Abstract_task):
     def __init__(self, x, y, s, V, s_start, s_end, s_step, result_db_file,
-                global_res_db_file, state = global_const.state_planned, slurm_id = None, kpts=False):
+                global_res_db_file, state = global_const.state_planned, slurm_id = None, kpts=False, wfn=True):
         if debug:
             print("debug: x,",x,"y",y,"s",s,"V",V,"s_start",s_start,"s_end",s_end,"s_step",s_step)
-        Abstract_task.__init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=kpts)
+        Abstract_task.__init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=kpts, wfn=wfn)
         self.task_type = global_const.task_descend_tip
         self.s_start = round(s_start,nd)
         self.s_end = round(s_end,nd)
@@ -231,9 +286,12 @@ class Descend_tip_task(Abstract_task):
                 print ("INIT-CALCULATION: init_scan_point_id", init_scan_point_id)
             init_s_step = round(init_source_point[1] - self.s,nd)
             if debug:
-                print ("INIT-CALCULATION: init_s_ster", init_s_step)
+                print ("INIT-CALCULATION: init_s_step", init_s_step)
             with init_source:
                 self.atoms = init_source.extract_atoms_object(init_scan_point_id)
+                if debug:
+                    print ("INIT-CALCULATION: init_source",init_source)
+                    print ("INIT-CALCULATION: self.atoms", self.atoms)
                 if self.atoms is None:
                     raise Exception("Could not obtain initial atoms object from the results database.")
                 self.tip_atom_inds = init_source.get_model_part_atom_ids("tip")

@@ -13,13 +13,13 @@ from kpfm_sim_result_db import Result_db
 
 # set this part :
 
-x = 0.0
-y = 0.0
-s = 6.135
+x = AAA*0.3018 ; #max49
+y = BBB*0.3039 ; #max43
+s = 8.75
 V = 0.0
-s_start = s
-s_end = 2.00
-s_step = 0.2
+s_start = 9.00
+s_end = 5.199  # tip-apex height is ~ 2.8 and we want to go up to 2.5 -> 2.8+2.5
+s_step = 0.1
 
 debug=True
 
@@ -77,3 +77,4 @@ new_task = Descend_tip_task(x, y, s, V, s_start, s_end, s_step, result_db_file, 
 task_db = Task_control_db(task_db_file)
 with task_db:
     task_db.write_task(new_task)
+

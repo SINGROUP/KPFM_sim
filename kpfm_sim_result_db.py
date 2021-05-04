@@ -86,6 +86,7 @@ class Result_db(object):
         self.db_con.commit()
 
 
+    # detach is giving error - don't know why
     def copy_atoms_data(self, from_db_file):
         cur = self.db_con.cursor()
         cur.execute("ATTACH ? AS from_db", (from_db_file,))
@@ -108,6 +109,20 @@ class Result_db(object):
         else:
             return row[0]
 
+
+    def get_model_part(self):
+        cur = self.db_con.cursor()
+        cur.execute("SELECT * FROM model_part")
+        model_part = []
+        pos_in_part = []
+        for row in cur:
+            model_part.append(row["part"])
+            pos_in_part.append(row["position_in_part"])
+        if debug:
+            print ("model_part_full",model_part)
+            print ('pos_in_part',pos_in_part)
+        return model_part, pos_in_part;       
+        
 
     def get_all_scan_point_entries(self):
         cur = self.db_con.cursor()
@@ -384,14 +399,19 @@ class Result_db(object):
 
     # atoms_model is a ASE Atoms object
     # is_fixed and belongs_to are lists or rank-1 arrays with elements for each atom
-    def write_atoms(self, atoms_model, is_fixed, belongs_to):
+    def write_atoms(self, atoms_model, is_fixed, belongs_to, simplistic = False):
         cur = self.db_con.cursor()
-        model_part_ids = []
-        for atom_belongs_to in belongs_to:
-            model_part_id = self.get_model_part_id(atom_belongs_to[0], atom_belongs_to[1])
-            if model_part_id is None:
-                model_part_id = self.write_model_part(atom_belongs_to[0], atom_belongs_to[1])
-            model_part_ids.append(model_part_id)
+        if simplistic:
+            model_part_ids = belongs_to;
+        else:
+            model_part_ids = []
+            for atom_belongs_to in belongs_to:
+                model_part_id = self.get_model_part_id(atom_belongs_to[0], atom_belongs_to[1])
+                if model_part_id is None:
+                    model_part_id = self.write_model_part(atom_belongs_to[0], atom_belongs_to[1])
+                model_part_ids.append(model_part_id)
+        if debug:
+            print ("model_part_ids:",model_part_ids)
         for atom_i, atom in enumerate(atoms_model):
             cur.execute("INSERT INTO atoms VALUES(?,?,?,?)",
                         (atom_i, atom.symbol, is_fixed[atom_i], model_part_ids[atom_i]))
@@ -496,17 +516,18 @@ class Result_db(object):
             return None
 
 
-    def extract_atoms_object(self, scan_point_id, get_charges = False):
+    def extract_atoms_object(self, scan_point_id, get_charges = False, get_model = False):
         cur = self.db_con.cursor()
         if debug:
            print ("cur:", cur)
+           print ("scan_point_id", scan_point_id)
         if scan_point_id is not None:
-            cur.execute("SELECT atom_id, x, y, z, atom_type, is_fixed, mulliken_charge "
+            cur.execute("SELECT atom_id, x, y, z, atom_type, is_fixed, mulliken_charge, model_part_id "
                         "FROM atomic_geometry "
                         "JOIN atoms ON atomic_geometry.atom_id=atoms.id "
                         "WHERE scan_point_id=? ORDER BY atom_id", (scan_point_id,))
         else:
-            cur.execute("SELECT atom_id, x, y, z, atom_type, is_fixed, mulliken_charge "
+            cur.execute("SELECT atom_id, x, y, z, atom_type, is_fixed, mulliken_charge, model_part_id "
                         "FROM atomic_geometry "
                         "JOIN atoms ON atomic_geometry.atom_id=atoms.id "
                         "ORDER BY atom_id") #, (scan_point_id,))
@@ -516,16 +537,28 @@ class Result_db(object):
         atom_types = []
         fixed_atom_inds = []
         charges = []
+        model_part = []
+        is_fixed = []
         for row in cur:
+            if False:
+                print (row["atom_type"])
+                print (row["is_fixed"])
+                print (row["model_part_id"])
             positions.append((row["x"], row["y"], row["z"]))
             atom_types.append(row["atom_type"])
             if row["is_fixed"]:
                 fixed_atom_inds.append(row["atom_id"])
             charges.append(row["mulliken_charge"])
+            if get_model:
+                model_part.append(row["model_part_id"])
+                is_fixed.append(row["is_fixed"])
         if debug:
             print ("after positions and atom_types_appending:")
             print ("positions:", positions)
             print ("atom_types:", atom_types)
+            print ("fixed_atom_inds",fixed_atom_inds)
+            print ("is_fixed",is_fixed)
+            print ('model_part',model_part)
         if atom_types:
             atoms_model = Atoms(symbols=atom_types, positions=positions, charges=charges)
             if debug:
@@ -561,6 +594,8 @@ class Result_db(object):
         if debug:
             print ("atoms_model:", atoms_model)
             print ("atoms_model.get_global_number_of_atoms():", atoms_model.get_global_number_of_atoms())
+        if get_model:
+            return (atoms_model, model_part, is_fixed), charges
         if get_charges:
             return atoms_model, charges
         else:

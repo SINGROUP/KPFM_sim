@@ -1,0 +1,69 @@
+#!/bin/bash
+#SBATCH --account=project_2003835
+#SBATCH -p medium           # test - for testing 1h ; medium - up to 20 nodes/36 hours ; large - 20-200 nodes/36 hours #
+#SBATCH --time=36:00:00     # dd-hh:mm:ss
+#SBATCH -J HQAfmBBB_AAA          # name 
+#SBATCH -o sbatch-%j.out    # where the outputs & errors are written
+#SBATCH -N 1                # N nodes to run (N x 64 = n); max 192 ; max debug 48
+#SBATCH -n 128              # n processes to run (N x 64 = n); max 192 ; max debug 48
+
+# check modules.txt for updating following lines: # module purge
+module load gcc/9.3.0  openmpi/4.0.3 cp2k/7.1-omp 
+export OMP_NUM_THREADS=1
+ulimit -s unlimited
+export ppath=/scratch/project_2003835/programs_KPFM
+export PYTHONPATH=$PYTHONPATH:$ppath/CP2k_mtools3:$ppath/DFT_gridIO3:$ppath/KPFM_FEM3:$ppath/KPFM_sim3
+KPFM_GLOBAL_SCRIPTS=$ppath/KPFM_sim3/scripts
+ORIG_DIR=`pwd`
+
+worker_name=worker_BBB_AAA
+glob_file=glob_res/afm.db
+result_file=afm_res_BBB_AAA.db
+task_db_file=afm_workers_BBB_AAA.db
+
+mkdir $worker_name
+cd $worker_name
+# cp ../$glob_file ./$task_db_file # note - no longer needed pdtt.py (plan_descend_tip_task.py) will do that automatically #
+# cp ../$glob_file ../$result_file
+ln -s ../cp2k_common_params.py ./cp2k_common_params.py
+ln -s ../cp2k_system_params.py ./cp2k_system_params.py
+#cp ../cp2k_system_params.py ./
+
+# ############### #
+# for run_task.py #
+#if len(sys.argv) == 4:
+#    task_db_file = sys.argv[1]
+#    project_path = sys.argv[2]
+#    slurm_id = int(sys.argv[3])
+#    task_type_constraint = None
+#    task_state_constraint = default_state_constraint
+# ############### #
+
+project_path=./
+slurm_id=$SLURM_JOB_ID
+
+# ******************** safety check *************************
+echo " *** safety check ***"
+echo "PYTHONPATH:" $PYTHONPATH
+echo "KPFM_GLOBAL_SCRIPTS:" $KPFM_GLOBAL_SCRIPTS
+echo "ORIG_DIR:" $ORIG_DIR
+echo "glob_file:" $glob_file
+echo "worker_name:" $worker_name
+echo "task_db_file" $task_db_file
+echo "slurm_id (2x)" $slurm_id $SLURM_JOB_ID
+echo "result_file" $result_file
+echo " *** safety check ended ***"
+# ***************** safety check ended **********************
+
+
+#python3 afm_opt_y.py
+
+#./cp_opt.sh
+
+python3 ../pdtt_BBB.AAA.py -f $task_db_file ../$result_file ../$glob_file
+
+trap "python3 $KPFM_GLOBAL_SCRIPTS/call_error_handler.py $SLURM_JOB_ID $ORIG_DIR $TASK_DB_FILE; exit" ERR TERM
+
+python3 ../run_task_w_forces.py --kpts $task_db_file $project_path $slurm_id
+
+echo "Done, done"
