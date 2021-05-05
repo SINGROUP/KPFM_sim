@@ -9,6 +9,8 @@ from kpfm_sim_error_handling import cp2k_error_handling, write_task_info
 from kpfm_sim_task_db import Task_control_db
 import kpfm_sim_global_constants as global_const
 
+from optparse import OptionParser
+
 from cp2k_init import CP2k_init, init_cp2k_restart
 
 def get_output_path(wrk_dir,pr_nm):
@@ -29,56 +31,52 @@ xyz_file_name = task_name + global_const.cp2k_xyz_suffix
 restart_file = task_name + global_const.cp2k_restart_suffix
 output_file = task_name + global_const.cp2k_out_suffix
 default_state_constraint = global_const.state_planned
-kpts = False # False 
+#kpts = False # False 
 
-if debug:
-    print("debug: sys.argv:", sys.argv, "len(sys.argv)", len(sys.argv))
 
 # setting paths, constrains and k-points:
+#sys.exit("Usage: python run_task.py (optionally -k or --kpts if k-points are necessary) <task_db_file> <project_path> <slurm_id> [type_constraint] [status_constraint]\n" \
+#            "Available task types: {}, {}".format(task_types[0], task_types[1]))
+erm="2 *.db files are expected \n usage: python run_task.py (optionally -k or --kpts if k-points are necessary) -f <task_db_file> <project_path> -s <slurm_id> -t [type_constraint] -c [status_constraint]\n"
 
-if len(sys.argv) == 4:
-    task_db_file = sys.argv[1]
-    project_path = sys.argv[2]
-    slurm_id = int(sys.argv[3])
-    task_type_constraint = None
-    task_state_constraint = default_state_constraint
-elif len(sys.argv) == 5:
-    if (sys.argv[1] == "-k") or (sys.argv[1] == "--kpts"):
-        kpts = True
-        task_db_file = sys.argv[2]
-        project_path = sys.argv[3]
-        slurm_id = int(sys.argv[4])
-        task_type_constraint = None
-        task_state_constraint = default_state_constraint
-    else:
-        task_db_file = sys.argv[1]
-        project_path = sys.argv[2]
-        slurm_id = int(sys.argv[3])
-        task_type_constraint = sys.argv[4]
-        task_state_constraint = default_state_constraint
-elif len(sys.argv) == 6:
-    if (sys.argv[1] == "-k") or (sys.argv[1] == "--kpts"):
-        kpts = True
-        task_db_file = sys.argv[2]
-        project_path = sys.argv[3]
-        slurm_id = int(sys.argv[4])
-        task_type_constraint = sys.argv[5]
-        task_state_constraint = default_state_constraint
-    else:
-        task_db_file = sys.argv[1]
-        project_path = sys.argv[2]
-        slurm_id = int(sys.argv[3])
-        task_type_constraint = sys.argv[4]
-elif len(sys.argv) == 7 and ((sys.argv[1] == "-k") or (sys.argv[1] == "--kpts")) :
-    kpts = True
-    task_db_file = sys.argv[2]
-    project_path = sys.argv[3]
-    slurm_id = int(sys.argv[4])
-    task_type_constraint = sys.argv[5]
-    task_state_constraint = sys.argv[5]
-else:
-   sys.exit("Usage: python run_task.py (optionally -k or --kpts if k-points are necessary) <task_db_file> <project_path> <slurm_id> [type_constraint] [status_constraint]\n" \
-            "Available task types: {}, {}".format(task_types[0], task_types[1]))
+parser = OptionParser()
+parser.add_option('-f', '--files', action ="store", type="string", nargs=2,
+                    help='2 files expected <taks_db_file> <project_path>')
+parser.add_option('-s', '--slurm_id', action ="store", type="string", nargs=1,
+                    help='1 slurm_id expexted <slurm_id>')
+parser.add_option('-t', '--type_constraint', action ="store", type="string",
+                    help='optional type constraint [type constraint]')
+parser.add_option('-c', '--status_constraint', action ="store", type="string",
+                    help='optional status constraint [status constraint]')
+parser.add_option('-k', '--kpts', action='store_true', default = False,
+                    help="if k-points are necesssary for the CP2K calc")
+parser.add_option('-w', '--no_wfn', action='store_false', default = True, 
+                    help="do not store the wfn or kp file for late recalculations")
+parser.add_option('-n', '--no_forces', action='store_false', default = True, 
+                    help="do not store the forces")
+(options,args) = parser.parse_args()
+
+if debug:
+    print("options:",options)
+    print("args:",args)
+    print("options.files",options.files)
+    print("options.slurm_id",options.slurm_id)
+    print("options.kpts",options.kpts)
+    print("options.no_wfn",options.no_wfn)
+    print("options.no_forces",options.no_forces)
+
+if (options.files == None) or (options.slurm_id == None):
+    sys.exit(erm)
+
+kpts = options.kpts
+bForces = options.no_forces
+wfnStore = options.no_wfn
+
+task_db_file = options.files[0]
+project_path = options.files[1]
+slurm_id = int(options.slurm_id)
+task_type_constraint = options.type_constraint
+task_state_constraint = options.status_constraint
 
 worker_dir = os.path.dirname(task_db_file)
 worker_path = os.path.join(project_path, worker_dir)
@@ -130,7 +128,7 @@ if cp2k_restart_exists:
         task.update_atoms_object(xyz_file_name)
     except IOError:
         cp2k_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
-    task.write_step_results_to_db(cp2k_restart_calc.get_output_path(), kpts=kpts, bForces = True)
+    task.write_step_results_to_db(cp2k_restart_calc.get_output_path(), kpts=kpts, bForces = bForces, wfnStore = wfnStore )
     is_steps_left = task.next_step()
     with task_db:
         task_db.update_task(task_id, task)
@@ -178,7 +176,7 @@ while is_steps_left:
         task.update_atoms_object(xyz_file_name)
     except IOError:
         cp2k_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
-    task.write_step_results_to_db( task_name+".out", kpts=kpts, bForces = True)
+    task.write_step_results_to_db( task_name+".out", kpts=kpts, bForces = bForces, wfnStore = wfnStore )
     #task.write_step_results_to_db(get_output_path(worker_dir,task_name))
     is_steps_left = task.next_step()
     with task_db:

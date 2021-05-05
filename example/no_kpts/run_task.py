@@ -1,1 +1,1 @@
-../../scripts/run_task.py
+../../scripts/run_task_w_forces.py

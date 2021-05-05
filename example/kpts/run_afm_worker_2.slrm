@@ -27,7 +27,7 @@ task_db_file=afm_workers.db
 
 mkdir $worker_name
 cd $worker_name
-cp ../$task_db_file ./
+# cp ../$task_db_file ./
 ln -s ../cp2k_common_params.py ./cp2k_common_params.py
 ln -s ../cp2k_system_params.py ./cp2k_system_params.py
 
@@ -61,11 +61,11 @@ echo " *** safety check ended ***"
 
 #./cp_opt.sh
 
-python3 ../plan_descend_tip_task_2.py --kpts ./$task_db_file ../$result_file ../glob_res/afm.db
+python3 ../plan_descend_tip_task_2.py --kpts -f ./$task_db_file ../$result_file ../glob_res/afm.db
 
 trap "python3 $KPFM_GLOBAL_SCRIPTS/call_error_handler.py $SLURM_JOB_ID $ORIG_DIR $TASK_DB_FILE; exit" ERR TERM
 
-python3 ../run_task_w_forces.py --kpts ./$task_db_file $project_path $slurm_id
+python3 ../run_task_w_forces.py --kpts -f ./$task_db_file $project_path -s $slurm_id
 
 echo "Done, done"
 

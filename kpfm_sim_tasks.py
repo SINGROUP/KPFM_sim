@@ -151,10 +151,11 @@ class Abstract_task(object, metaclass=ABCMeta):
         os.remove(xyz_file)
 
 
-    def write_step_results_to_db(self, cp2k_output_path, kpts=False,bForces=False):
-        print ("debug: kpts =",kpts,"; self.kpts",self.kpts)
-        wfn_file_name = self.task_name + global_const.cp2k_wfn_suffix(kpts=kpts)
-        print ("debug: wfn_file_name" , wfn_file_name )
+    def write_step_results_to_db(self, cp2k_output_path, kpts=False,bForces=False,wfnStore=True):
+        if wfnStore:
+            print ("debug: kpts =",kpts,"; self.kpts",self.kpts)
+            wfn_file_name = self.task_name + global_const.cp2k_wfn_suffix(kpts=kpts)
+            print ("debug: wfn_file_name" , wfn_file_name )
         cp2k_output = get_output_from_file(cp2k_output_path)
         energy = get_energy_from_output(cp2k_output)
         charges = get_charges_from_output(cp2k_output)
@@ -169,8 +170,9 @@ class Abstract_task(object, metaclass=ABCMeta):
             self.results.write_output_file(scan_point_id, cp2k_output)
             if forces is not None:
                 self.results.write_atomic_forces(scan_point_id, forces)
-            wfn_rel_storage_path = self.__store_wf_data(scan_point_id, wfn_file_name)
-            self.results.write_wf_data_path(scan_point_id, wfn_rel_storage_path)
+            if wfnStore:
+                wfn_rel_storage_path = self.__store_wf_data(scan_point_id, wfn_file_name)
+                self.results.write_wf_data_path(scan_point_id, wfn_rel_storage_path)
         
         os.remove(cp2k_output_path)
         os.remove(self.task_name + global_const.cp2k_restart_suffix)

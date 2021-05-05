@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH -p short             # debug - for testing ; short - up to 4 hours ; batch - up to 5 days #
-#SBATCH --time=04:00:00      # dd-hh:mm:ss
+#SBATCH -p debug             # debug - for testing ; short - up to 4 hours ; batch - up to 5 days #
+#SBATCH --time=00:15:00      # dd-hh:mm:ss
 #SBATCH --mem-per-cpu=1000   # 1000 - 3500 nromally, but can be even higher
-#SBATCH -J k-yCl             # name 
+#SBATCH -J test_nok          # name 
 #SBATCH -o slurm-%j.out      # where the outputs & errors are written
 #SBATCH --constraint=csl     # require Haswell CPUs with 24 cores per node (ivb, hsw, vdw, skl }= avx;  hsw, vdw, skl }= avx2 )  
 #SBATCH -N 1
@@ -21,13 +21,16 @@ export PYTHONPATH=$PYTHONPATH:$progdir/KPFM_sim3:$progdir/CP2k_mtools3:$progdir/
 KPFM_GLOBAL_SCRIPTS=/scratch/work/krejcio1/Programs/ana-20.04tf2_py3.7.7/KPFM_sim3/scripts
 ORIG_DIR=`pwd`
 
-worker_name=worker_y-Cl
+worker_name=worker_test
 glob_db=glob_res/afm.db
-result_file=afm_res_y-Cl.db
+result_file=afm_res_test.db
 task_db_file=afm_workers.db
 
+rm -r $worker_name
+rm $result_file
+rm $task_db_file
 mkdir $worker_name
-cp $glob_db ./$result_file
+# cp $glob_db ./$result_file
 cd $worker_name
 # cp ../$task_db_file ./$task_db_file
 ln -s ../cp2k_common_params.py ./cp2k_common_params.py
@@ -64,11 +67,11 @@ echo " *** safety check ended ***"
 
 #./cp_opt.sh
 
-python3 ../plan_descend_tip_task_y-Cl.py --kpts -f ./$task_db_file ../$result_file ../$glob_db
+python3 ../plan_test.py -f ./$task_db_file ../$result_file ../$glob_db
 
 trap "python3 $KPFM_GLOBAL_SCRIPTS/call_error_handler.py $SLURM_JOB_ID $ORIG_DIR $TASK_DB_FILE; exit" ERR TERM
 
-python3 ../run_task_w_forces.py --kpts -w -f ./$task_db_file $project_path -s $slurm_id
+python3 ../run_task.py -n -f ./$task_db_file $project_path -s $slurm_id # -n -- no forces #
 
 echo "Done, done"
 

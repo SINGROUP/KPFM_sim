@@ -1,0 +1,81 @@
+# -*- coding: utf-8 -*-
+#!/usr/bin/python
+
+import os, sys
+
+import os, sys
+from optparse import OptionParser
+
+#from KPFM_sim.kpfm_sim_tasks import Descend_tip_task
+#from KPFM_sim.kpfm_sim_task_db import Task_control_db
+#from KPFM_sim.kpfm_sim_result_db import Result_db
+from kpfm_sim_tasks import Descend_tip_task, prepare_db_for_task
+from kpfm_sim_task_db import Task_control_db
+from kpfm_sim_result_db import Result_db
+
+# set this part :
+
+x = 0.0
+y = 2.86*0.5
+s = 6.135
+V = 0.0
+s_start = s
+s_end = 6.00
+s_step = 0.1
+
+debug=True
+
+# don't touch the ater part, unless you know what you are doing
+
+#parser = argparse.ArgumentParser(description='plan the task for either tip-descending (AFM) or KPFM')
+parser = OptionParser()
+parser.add_option('-f', '--files', action ="store", type="string", nargs=3,
+                    help='3 files expected <taks_db_file> <result_db_file> <global_res_db_file>')
+parser.add_option('-k', '--kpts', action='store_true', default = False,
+                    help="if k-points are necesssary for the CP2K calc")
+parser.add_option('-n', '--no_wfn', action='store_false', default = True, 
+                    help="do not store the wfn or kp file for late recalculations")
+(options,args) = parser.parse_args()
+
+if debug:
+    print("options:",options)
+    print("args:",args)
+    print("options.files",options.files)
+    print("options.kpts",options.kpts)
+    
+if options.files == None:
+    sys.exit("3 *.db files are expected \n usage: python plan_descend_tip_task.py (optionally -k or --kpts if k-points are necessary; --no_wfn if storage of wfn is not necessary) <task_db_file> <result_db_file> <global_res_db_file>")
+
+task_db_file = options.files[0]
+result_db_file = options.files[1]
+global_res_db_file = options.files[2]
+
+if debug:
+    print("task_df_file",task_db_file)
+    print("result_df_file",result_db_file)
+    print("global_res_df_file",global_res_db_file)
+
+#print('just a debugging at the moment moving out')
+#sys.exit()
+
+#nd = 6# number of digits for rounding -- not needed rounding of x, y, s, V, s_... is in : kpfm_sim_tasks.py
+# not working - detach for whatever reason
+#if not os.path.isfile(result_db_file):
+#    local_results = Result_db(result_db_file)
+#    with local_results:
+#        local_results.copy_atoms_data(global_res_db_file)
+
+
+prepare_db_for_task(global_res_db_file, result_db_file, task_db_file)
+
+"""
+class Descend_tip_task(Abstract_task):
+    def __init__(self, x, y, s, V, s_start, s_end, s_step, result_db_file,
+                    global_res_db_file, state = global_const.state_planned, slurm_id = None):
+"""
+
+new_task = Descend_tip_task(x, y, s, V, s_start, s_end, s_step, result_db_file, global_res_db_file, kpts=options.kpts, wfn=options.no_wfn)
+
+task_db = Task_control_db(task_db_file)
+with task_db:
+    task_db.write_task(new_task)
