@@ -60,7 +60,7 @@ Now that you have initialized the result database and stored the initial atomic 
 
 To create a descend tip task, use the ``plan_descend_tip_task.py`` script template in ``control_script_templates`` folder and change the parameters to match your simulation. Make sure ``V = 0`` to run without bias voltage. Then call
 
-``python plan_descend_tip_task.py <task_db_file> <result_db_file> <global_res_db_file>``
+``python plan_descend_tip_task.py -f <task_db_file> <result_db_file> <global_res_db_file>``
 
 where ``<task_db_file>``, ``<result_db_file>`` and ``<global_res_db_file>`` are relative paths to task, result and global result database files respectively.
 
@@ -69,13 +69,13 @@ In principle, the SQLite database handles concurrent writes to it correctly. How
 
 If you want to execute multiple tasks at the same time in an environment with a parallel file system, the ``task_db_file`` and ``result_db_file`` should be separate for each concurrently running job as described in the implementation note above. If you follow the suggested scheme, you should call ``plan_descend_tip_task.py`` with arguments
 
-``python plan_descend_tip_task.py worker_1/tasks.db worker_1/results.db your_simulation_results.db``
+``python plan_descend_tip_task.py -f worker_1/tasks.db worker_1/results.db your_simulation_results.db``
 
 where ``worker_1`` is a subfolder you created and ``your_simulation_results.db`` is the database file containing the initial atomic configuration. ``tasks.db`` and ``results.db`` files are created automatically if they do not exist and the task you planned is saved to the ``tasks.db`` database file.
 
 To execute a task you have planned, run the ``run_task.py`` script found in the ``scripts`` folder as
 
-``python run_task.py <task_db_file> <project_path> <slurm_id> [type_constraint] [status_constraint]``
+``python run_task.py -f <task_db_file> <project_path> -s <slurm_id> [type_constraint] [status_constraint]``
 
 where ``<task_db_file>`` is a relative path from ``<project_path>`` to the task database file and ``<project_path>`` is the absolute path to the root directory of the simulations. ``project_path`` is needed in cases where the CP2k is run on a local file system of a node but the database files are on the shared file system. Since the tasks are typically executed in Slurm batch jobs, the ``<slurm_id>`` should be set to the ID of the slurm job executing the task. ``[type_constraint]`` and`` [status_constraint]`` are optional and can be used to restrict the type of the task to be run if there are multiple different kinds of tasks waiting and you want to run a specific one. See the ``worker_task_batch.sh`` script in ``slurm_script_templates`` for an example of a Slurm script (written for CSC Taito cluster). In particular, you should have the line
 ``trap "python $KPFM_GLOBAL_SCRIPTS/call_error_handler.py $SLURM_JOB_ID $ORIG_DIR $TASK_DB_FILE; exit" ERR TERM``

@@ -123,7 +123,7 @@ To create a descend tip task, use the <tt>plan_descend_tip_task.py</tt> script t
 </p>
 
 <p>
-<tt>python plan_descend_tip_task.py &lt;task_db_file&gt; &lt;result_db_file&gt; &lt;global_res_db_file&gt;</tt>
+<tt>python plan_descend_tip_task.py -f &lt;task_db_file&gt; &lt;result_db_file&gt; &lt;global_res_db_file&gt;</tt>
 </p>
 
 <p>
@@ -140,7 +140,7 @@ If you want to execute multiple tasks at the same time in an environment with a 
 </p>
 
 <p>
-<tt>python plan_descend_tip_task.py worker_1/tasks.db worker_1/results.db your_simulation_results.db</tt>
+<tt>python plan_descend_tip_task.py -f worker_1/tasks.db worker_1/results.db your_simulation_results.db</tt>
 </p>
 
 <p>
@@ -152,7 +152,7 @@ To execute a task you have planned, run the <tt>run_task.py</tt> script found in
 </p>
 
 <p>
-<tt>python run_task.py &lt;task_db_file&gt; &lt;project_path&gt; &lt;slurm_id&gt; [type_constraint] [status_constraint]</tt>
+<tt>python run_task.py -f &lt;task_db_file&gt; &lt;project_path&gt; -c &lt;slurm_id&gt; [type_constraint] [status_constraint]</tt>
 </p>
 
 <p>
@@ -165,7 +165,7 @@ in the Slurm script if you want to have the error handler working. It is not nec
 
 <p>
 The way how the bias voltage between the probe and the sample holder is applied to the KPFM simulation depends on the type of the system you are studying. In particular, there are two entirely different cases:
-</p>
+</p>§
 
 <p>
 <ol type="1" start="1">
