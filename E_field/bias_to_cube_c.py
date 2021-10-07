@@ -12,6 +12,8 @@ import math
 from   ctypes import c_int, c_double, c_char_p
 import ctypes
 
+print ("here")
+
 # ***** System information: ***** #
 # path (absolute or relative) to  #
 # your PP-AFM code !!! Ommited    #
@@ -39,7 +41,8 @@ eV_to_au = 0.03674932540261308                                   #
 lib_ext   ='_lib.so'                                             #
 #                                                                #
 # ***************** PARAMETERS ********************************* #
-debug = False ; #True
+runable = False;
+debug = True ; #True
 save_pre_opt = True ; 
 # ----------------- Main parameters ---------------------------- #
 
@@ -98,6 +101,7 @@ array2d = np.ctypeslib.ndpointer(dtype=np.double, ndim=2, flags='CONTIGUOUS')
 array3d = np.ctypeslib.ndpointer(dtype=np.double, ndim=3, flags='CONTIGUOUS')
 array4d = np.ctypeslib.ndpointer(dtype=np.double, ndim=4, flags='CONTIGUOUS')
 
+print ("here2")
 # python wrape to C++ functions ------------------------------------------------------
 
 #void create_xyzGrid(double *xyzgrid, int * dims, double *vox_vec, double *g_null){
@@ -225,12 +229,16 @@ def save_cube_c(density, mol_xyz, grid_origin, grid_vec, file_path='pot.cube'):
     lib.writeCube(n_at, mol_Z, xyz, g_o, g_v , dims, data, file_path.encode());
     print("--- Cube file written ---")
 
-
+print("here 3")
 
 
 # functions: ---------------------------------------------------------------------------
 
-def save_cube(density, mol_xyz, grid_origin, grid_vec, file_path='hartree.cube'):
+def write_E(x):
+    out = ' '+"{:.5E}".format(x) if x >= 0 else "{:.5E}".format(x);
+    return out;
+
+def save_cube(density, mol_xyz, grid_origin, grid_vec, file_path='hartree.cube', cube_head=None):
     # original function from Niko Oinonen - density - data in eV; mol_xyz: 0-x, 1-y, 2-z, 3-Z for all atoms n_at*4 matrix; grid_origin - origin of the cube file in Ang; #
     # grid_vec - the small differential vector in And; file_path - how to save#
     N = len(mol_xyz)
@@ -240,19 +248,24 @@ def save_cube(density, mol_xyz, grid_origin, grid_vec, file_path='hartree.cube')
     mol_xyz = mol_xyz.copy()
     with open(file_path, 'w') as f:
         f.write('Comment line\nComment line\n')
-        f.write(f'{N} {" ".join([str(o/R_BOHR) for o in grid_origin])}\n')
-        for i in range(3):
-            f.write(f'{grid_shape[i]} {" ".join([str(v) for v in grid_vec[i]/R_BOHR])}\n')
+        if cube_head is None:
+            f.write(f'{N:5d} {" ".join([str("{:11.6f}".format(o/R_BOHR)) for o in grid_origin])}\n')
+            for i in range(3):
+                f.write(f'{grid_shape[i]:5d} {" ".join([str("{:11.6f}".format(v)) for v in grid_vec[i]/R_BOHR])}\n')
+        else:
+            f.write(cube_head)
         for x in mol_xyz:
             x[:3] /= R_BOHR
-            f.write(f'{int(x[-1])} 0.0 {x[0]} {x[1]} {x[2]}\n')
+            f.write(f'{int(x[-1]):5d} {0.0:11.6f} {x[0]:11.6f} {x[1]:11.6f} {x[2]:11.6f}\n')
+        ai = 0;
         for i in range(grid_shape[0]):
             for j in range(grid_shape[1]):
                 for k in range(grid_shape[2]):
-                    f.write(f'{density[i, j, k]} ')
-                    if (k+1) % 6 == 0:
+                    f.write(f' {write_E(density[i, j, k])}')
+                    ai += 1 ;
+                    if (ai % 6) == 0:
                         f.write('\n')
-                f.write('\n')
+                # f.write('\n') # !! This part is noy in CP2K !!#
 
 
 def separate_top_bottom(z_pos,cc,fi): # cc -centre
@@ -307,12 +320,16 @@ def copy_arround_borders(pos,lvs,sd): # sd - safe distance
         print("debug: len(pos2)",len(pos2))
     return pos2;
 
+print("here 4")
+
 # ----  definition of functions here: -------
-def create_biased_cube(g_file,V_tip, idx=0, final_pot_name='final_pot_opt_'+str(zer)+'.cube'):
-    # the main function, that reads the traj file (**g_file**); takes the geometry with index **idx**; and prepare the electrostatic potential for the Tip-Sample system with tip voltage **Vtip** #
-    # the final cube file is written into the **final_pot_name** file (this way multiple functions can be runned in the same time) #
-    print ("Going to create KPFM (metallic) tip-sample electrostatic field -- for traj file:",g_file,"; index:",str(idx),"; and cube file:", final_pot_name);
-    geom = read(g_file,index=idx );
+def create_biased_cube(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.cube', cube_head=None):
+    '''
+    the main function, that for given geometry in an ASE objec that is given in **geom** and prepare the electrostatic potential for the Tip-Sample system with tip voltage **Vtip** #
+    the final cube file is written into the **final_pot_name** file (this way multiple functions can be runned in the same time); cube_head is important for the exact match with the cp2k code #
+    !!! beware CP2K code is super strict, only the python save_cube is working properly for writing the cube file as it seems. #
+    '''
+    print ("Going to create KPFM (metallic) tip-sample electrostatic field -- for given geometry and creates cube file:", final_pot_name);
     pos = geom.positions
     n_at = len(pos)
     mol_xyz = np.zeros((n_at,4))
@@ -384,7 +401,7 @@ def create_biased_cube(g_file,V_tip, idx=0, final_pot_name='final_pot_opt_'+str(
         Vtmp2 = Varr.copy()
     if save_pre_opt:
         print("saving pre-optimized potential small")
-        save_cube_c(Varr[n_add:nx+n_add,:,n_add:nz+n_add],mol_xyz,g_or,g_vec,file_path='pot_test.cube') # y is no longer larger - not needed
+        save_cube(Varr[n_add:nx+n_add,:,n_add:nz+n_add],mol_xyz,g_or,g_vec,file_path='pot_test.cube', cube_head=cube_head) # y is no longer larger - not needed
     g_or2 = g_or - np.array([g_vec[0,0]*n_add+g_vec[2,0]*n_add,0.,g_vec[0,2]*n_add+g_vec[2,2]*n_add])
     if debug:
         print ("debug: g_or2", g_or2)
@@ -398,13 +415,18 @@ def create_biased_cube(g_file,V_tip, idx=0, final_pot_name='final_pot_opt_'+str(
     Varr = opt_V(n_add, ndim, optind, Varr, zer, precond,inner_step=inner_step)
     # !!!! still some weird behaviour on the edges .... !!!! #
     print ("fully optimized potential - going to saving;")
-    save_cube_c(Varr[n_add:nx+n_add,:,n_add:nz+n_add],mol_xyz,g_or,g_vec,file_path=final_pot_name) # y is no longer larger - not needed
-    #GU.save_scal_field( 'V_out', Varr[n_add:nx+n_add,n_add:ny+n_add,n_add:nz+n_add], lvec, data_format="xsf" )
-    print ("Everything saved for traj file:",g_file,"; index:",str(idx),"; and cube file:", final_pot_name);
+    np.save(final_pot_name+"npy",Varr[n_add:nx+n_add,:,n_add:nz+n_add])
+    save_cube(Varr[n_add:nx+n_add,:,n_add:nz+n_add],mol_xyz,g_or,g_vec,file_path=final_pot_name, cube_head=cube_head) # y is no longer larger - not needed
+    #GU.save_scal_field( 'V_out', Varr[n_add:nx+n_add,n_add:ny+n_add,n_add:nz+n_add], lvec, data_format="xsf" ,cube_head=cube_head)
+    print ("Everything saved for given geometry and cube file:", final_pot_name);
     return ;
 
 # --------- main run -------------------------
-create_biased_cube(g_file,V_tip,idx=idx,final_pot_name=g_file+"_"+str(idx)+"_final_pot.cube");
-print ("--- done ---")
+print("here 5")
+
+if runable:
+    geom = read(g_file,index=idx );
+    create_biased_cube(geom,V_tipfinal_pot_name=g_file+"_"+str(idx)+"_final_pot.cube");
+    print ("--- done ---")
 
 #

@@ -368,9 +368,9 @@ extern "C" {
                 for (int k=0; k<nz; k++ ){
                     fprintf(f,"%4.10f ",data[iv]);
                     iv += 1;
-                    if (((k + 1) % 6) == 0){fprintf(f,"\n");}
+                    if ((iv % 6) == 0){fprintf(f,"\n");}
                     }
-                fprintf(f,"\n");
+                // fprintf(f,"\n"); // !! This is not in CP2K //
                 }
             }
         fclose(f);
