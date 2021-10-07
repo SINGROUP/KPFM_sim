@@ -18,7 +18,7 @@ def get_output_path(wrk_dir,pr_nm):
 
 # write out things for debugging : #
 
-debug = True
+debug = False
 
 # Main settings: #
 
@@ -104,7 +104,7 @@ with task_db:
 write_task_info(task_id, task_name)
 task.init_calculation(task_name, project_path, worker_path)
 
-cp2k_restart_exists = False
+cp2k_restart_exists = False ## We try to put there automatic restart ##
 print("Type of the task = {}, state of the task = {}".format(task.task_type, task.state))
 if task.state == global_const.state_waiting:
     cp2k_restart_exists = task.get_restart_data()
@@ -112,26 +112,28 @@ if task.state == global_const.state_waiting:
 is_steps_left = True
 was_not_shift = True
 
-# If CP2k calculation was terminated before, do a restart
-if cp2k_restart_exists:
-    cp2k_restart_calc = init_cp2k_restart(task_name, restart_file)
-    task.slurm_id = slurm_id
-    task.state = global_const.state_running
-    with task_db:
-        task_db.update_task_slurm_id(task_id, slurm_id)
-        task_db.update_task_state(task_id, global_const.state_running)
-    try:
-        cp2k_restart_calc.run()
-    except CalledProcessError:
-        cp2k_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
-    try:
-        task.update_atoms_object(xyz_file_name)
-    except IOError:
-        cp2k_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
-    task.write_step_results_to_db(cp2k_restart_calc.get_output_path(), kpts=kpts, bForces = bForces, wfnStore = wfnStore )
-    is_steps_left = task.next_step()
-    with task_db:
-        task_db.update_task(task_id, task)
+## -- Going to be automatic -- ##
+## If CP2k calculation was terminated before, do a restart
+# if cp2k_restart_exists:
+#    cp2k_restart_calc = init_cp2k_restart(task_name, restart_file)
+#    task.slurm_id = slurm_id
+#    task.state = global_const.state_running
+#    with task_db:
+#        task_db.update_task_slurm_id(task_id, slurm_id)
+#        task_db.update_task_state(task_id, global_const.state_running)
+#    try:
+#        cp2k_restart_calc.run()
+#    except CalledProcessError:
+#        cp2k_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
+#    try:
+#        task.update_atoms_object(xyz_file_name)
+#    except IOError:
+#        cp2k_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
+#    task.write_step_results_to_db(cp2k_restart_calc.get_output_path(), kpts=kpts, bForces = bForces, wfnStore = wfnStore )
+#    is_steps_left = task.next_step()
+#    with task_db:
+#        task_db.update_task(task_id, task)
+## -- Going to be automatic --  ##
 
 # Calculate new steps of the loaded task until all done or time ends.
 while is_steps_left:
@@ -153,7 +155,9 @@ while is_steps_left:
     
     # Check which task type was loaded from the database and choose
     # correct CP2k initialization based on that
-    cp2k_initializer = CP2k_init(task_name, task.get_atoms_object())
+    cp2k_initializer = CP2k_init(task_name, task.get_atoms_object(save_inds=task.get_save_inds(),xyz_file_name=xyz_file_name))
+    #print ("DEBUG: task.atoms",task.atoms ); exit()
+   
     if isinstance(task, Descend_tip_task):
         cp2k_calc = cp2k_initializer.init_desc_tip(task.V, E_per_V=task.E_per_V)
     elif isinstance(task, Tune_bias_task):

@@ -12,11 +12,13 @@ from axisym_pot_to_cube import axisym_pot_in_db_to_cube
 from macro_gap_efield import calc_macro_gap_efield
 import kpfm_sim_global_constants as global_const
 
+import numpy as np
+
 eps = 1.0e-13
 
 nd = 6# number of digits for rounding
 
-debug = True
+debug = False
 
 def prepare_db_for_task(global_res_db_file, result_db_file, task_db_file):
     '''
@@ -30,6 +32,8 @@ def prepare_db_for_task(global_res_db_file, result_db_file, task_db_file):
     gm = True
     with from_db:
         scan_points = from_db.get_all_scan_point_entries()
+        #if scan_points == None:
+        #    print("The global input file was not found; \n DEBUG: from_db",from_db,"\n DEBUG: global_res_db_file",global_res_db_file, "\n" )
         with to_db :
             with control_db :
                 for scan_point in scan_points:
@@ -49,10 +53,10 @@ def prepare_db_for_task(global_res_db_file, result_db_file, task_db_file):
                             model_part = tmp[1]
                             is_fixed = tmp[2]
                             full_model, pos_in_part  = from_db.get_model_part()
-                            #print ("debug: model_part",model_part)
-                            #print ('debug: is_fixed', is_fixed)
-                            #print ('debug: full_model',full_model);
-                            #print ('debug: pos_in_part',pos_in_part);
+                            print ("debug: model_part",model_part)
+                            print ('debug: is_fixed', is_fixed)
+                            print ('debug: full_model',full_model);
+                            print ('debug: pos_in_part',pos_in_part);
                             to_db.write_atoms(atoms, is_fixed, model_part, simplistic = True)
                             for i in range(len(full_model)):
                                 to_db.write_model_part(full_model[i],pos_in_part[i])
@@ -87,6 +91,8 @@ class Abstract_task(object, metaclass=ABCMeta):
         self.E_per_V = None
         self.kpts = kpts
         self.wfn = wfn
+        self.tip_save_ind = None ## they are supposed to be named *safe* ##
+        self.sample_save_ind = None
 
 
     @abstractmethod
@@ -114,14 +120,68 @@ class Abstract_task(object, metaclass=ABCMeta):
     def next_step(self):
         pass
 
-
-    def get_atoms_object(self):
+    def get_save_inds(self):
+        '''
+        will return two indices - tip top (fixed) atom and sample bottom (fixed) atom - so the geometries xyz can be compared
+        ''' 
         if self.calc_initialized:
-            return self.atoms
+            return [self.tip_save_ind, self.sample_save_ind]
+        else:
+            raise Exception("Could not get atoms object from task because the calculation was not initialized.")
+
+    def check_restart(self,pos,save_inds,xyz_file_name,zer=10**(-1*nd)):
+        '''
+        atomic positions = check_restart(save_inds,pos_z,xyz_file_name,zer):
+        routinte to check if we should use the final geometry saved in the xyz_file_name using indices of atoms in save_inds is the same as positions in pos_z
+        zer - maximal difference ~ 10^-6
+        '''
+        si = save_inds
+        tp = pos[si[0]] # tip_positions
+        sp = pos[si[1]] # sample_position
+        if debug:
+            print ("DEBUG: si, tp, sp", si, tp, sp );
+        #
+        try:
+            neco = read(xyz_file_name)
+            npos = neco.positions
+            txyz = npos[si[0]]
+            sxyz = npos[si[1]]
+            if debug:
+                print ("DEBUG: txyz, sxyz", txyz, sxyz );
+                print ("DEBUG: dif tip", np.linalg.norm(tp - txyz) )
+                print ("DEBUG: dif sample", np.linalg.norm(sp - sxyz) )
+                print ("DEBUG: zero", zer)
+            #
+            if (np.linalg.norm(tp - txyz) < zer) and (np.linalg.norm(sp - sxyz) < zer):
+                print("better geometry found, starting from the xyz file ...")
+                if True:
+                    nlnp = np.linalg.norm(pos-npos,axis=1)
+                    print ("DEBUG: np.linalg.norm(pos-npos)",nlnp[(nlnp > zer)])
+                return npos #True
+            else:
+                print("differences in geometries, going with the task-made geometry")
+                return pos # False
+        except:
+            print("xyz file have not been found, going with the task-made geometry")
+            return pos #False
+
+
+    def get_atoms_object(self,save_inds=None,xyz_file_name=None):
+        '''
+        routine for obtaining the atoms object. If there exist xyz file with newer geometry, it is checked if it is from the same step and it updates the geometry from the xyz file
+        '''
+        if self.calc_initialized:
+            ao = self.atoms
+            if (save_inds is not None) and (xyz_file_name is not None):
+                pos = self.check_restart(ao.positions,save_inds,xyz_file_name)
+                ao.positions = pos
+            #
+            return ao
         else:
             raise Exception("Could not get atoms object from task because the calculation was not initialized.")
 
 
+    # ---  Maybe to be completely omitted  ---
     def get_restart_data(self):
         if self.slurm_id is not None:
             restart_data_path = os.path.join(self.worker_path, repr(self.slurm_id))
@@ -298,6 +358,17 @@ class Descend_tip_task(Abstract_task):
                     raise Exception("Could not obtain initial atoms object from the results database.")
                 self.tip_atom_inds = init_source.get_model_part_atom_ids("tip")
                 self.sample_atom_inds = init_source.get_model_part_atom_ids("sample")
+                try:
+                    print ("DEBUG: trying get save index (only 1) for checking restart - tip top")
+                    self.tip_save_ind = init_source.get_model_part_atom_ids("tip",position_in_part="top")[0]
+                except:
+                    print ("DEBUG: cannot do: self.tip_save_inds = init_source.get_model_part_atom_ids('tip',position_in_part='top'")
+                try:
+                    print ("DEBUG: trying get save index (only 1) for checking restart - sample bottom")
+                    self.sample_save_ind = init_source.get_model_part_atom_ids("sample",position_in_part="bottom")[0]
+                except:
+                    print ("DEBUG: cannot do: self.tip_save_inds = init_source.get_model_part_atom_ids('sample',position_in_part='bottom'")
+
                 init_source.extract_wf_data(init_scan_point_id, wfn_file_name, self.project_path)
                 #self.start_tip() moved to run_task.py
                 self.descend_tip(init_s_step)

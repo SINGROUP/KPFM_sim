@@ -10,7 +10,7 @@ from ase.constraints import FixAtoms
 eps = 1.0e-13
 bigeps = 1.0e-6
 
-debug = True
+debug = False
 
 # Class for storing the results of a KPFM simulation to a database and
 # extracting the results from there.

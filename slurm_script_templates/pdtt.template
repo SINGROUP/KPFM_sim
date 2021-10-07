@@ -13,12 +13,12 @@ from kpfm_sim_result_db import Result_db
 
 # set this part :
 
-x = AAA*0.3018 ; #max49
-y = BBB*0.3039 ; #max43
-s = 8.75
+x = -0.1243 + AAA * 1.2495 ; # (B0-B7)/7/2
+y = -3.1602 + BBB * 0.7409 ; # (B0-N0)
+s = 23.3277
 V = 0.0
-s_start = 9.00
-s_end = 5.199  # tip-apex height is ~ 2.8 and we want to go up to 2.5 -> 2.8+2.5
+s_start = 22.076 ## >>> -0.0786-0.0457 = -0.1243 >>> 15.7430-18.9032 =  3.1602 >>> ss_r = 20.5662-13.4145 = 7.1517 >>> ss_v = 23.3277 >>> 2.8+3.1 = 5.9 >>> ss_v-(ss_r-5.9) = 22.076 >>> ss_v-(ss_r-2.8) = 18.976  ##
+s_end = 18.976  # tip-apex height is ~ 2.8 and we want to go up to 3.1 -> 2.8+3.1
 s_step = 0.1
 
 debug=True

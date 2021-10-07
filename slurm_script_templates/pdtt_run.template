@@ -2,10 +2,13 @@
 #SBATCH --account=project_2003835
 #SBATCH -p medium           # test - for testing 1h ; medium - up to 20 nodes/36 hours ; large - 20-200 nodes/36 hours #
 #SBATCH --time=36:00:00     # dd-hh:mm:ss
-#SBATCH -J HQAfmBBB_AAA          # name 
+#SBATCH -J CuAfmBBB_AAA          # name 
 #SBATCH -o sbatch-%j.out    # where the outputs & errors are written
-#SBATCH -N 1                # N nodes to run (N x 64 = n); max 192 ; max debug 48
-#SBATCH -n 128              # n processes to run (N x 64 = n); max 192 ; max debug 48
+#SBATCH -N 5                # N nodes to run (N x 64 = n); max 192 ; max debug 48
+#SBATCH --ntasks-per-node=128  # to run properly!!!!
+
+
+###SBATCH -n 128              # n processes to run (N x 64 = n); max 192 ; max debug 48
 
 # check modules.txt for updating following lines: # module purge
 module load gcc/9.3.0  openmpi/4.0.3 cp2k/7.1-omp 
@@ -23,11 +26,8 @@ task_db_file=afm_workers_BBB_AAA.db
 
 mkdir $worker_name
 cd $worker_name
-# cp ../$glob_file ./$task_db_file # note - no longer needed pdtt.py (plan_descend_tip_task.py) will do that automatically #
-# cp ../$glob_file ../$result_file
 ln -s ../cp2k_common_params.py ./cp2k_common_params.py
 ln -s ../cp2k_system_params.py ./cp2k_system_params.py
-#cp ../cp2k_system_params.py ./
 
 # ############### #
 # for run_task.py #
@@ -55,15 +55,8 @@ echo "result_file" $result_file
 echo " *** safety check ended ***"
 # ***************** safety check ended **********************
 
-
-#python3 afm_opt_y.py
-
-#./cp_opt.sh
-
 python3 ../pdtt_BBB.AAA.py -f $task_db_file ../$result_file ../$glob_file
 
-trap "python3 $KPFM_GLOBAL_SCRIPTS/call_error_handler.py $SLURM_JOB_ID $ORIG_DIR $TASK_DB_FILE; exit" ERR TERM
-
-python3 ../run_task_w_forces.py -k -w -f $task_db_file $project_path -s $slurm_id # -k .. kpts ; -w .. no wfn ; 
+python3 ../run_task_w_forces.py -w -n -f $task_db_file $project_path -s $slurm_id # -k .. kpts ; -w .. no wfn ; -n .. no forces ; -f .. files
 
 echo "Done, done"
