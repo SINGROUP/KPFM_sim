@@ -12,7 +12,9 @@ import math
 from   ctypes import c_int, c_double, c_char_p
 import ctypes
 
-print ("here")
+lp = os.path.dirname(os.path.realpath(__file__))
+print ("DEBUG: lib_path", lp)
+
 
 # ***** System information: ***** #
 # path (absolute or relative) to  #
@@ -91,7 +93,7 @@ inner_step = 1000; # amount of inner steps                     #
 cpp_name='ElField' # uncomment the following two if you want to always compile the C++ functions #
 #cpp_utils.compile_lib( cpp_name  )
 #cpp_utils.make( "all"  )
-lib    = ctypes.CDLL( "./" + cpp_name + lib_ext )    # load dynamic librady object using ctypes
+lib    = ctypes.CDLL( lp+"/" + cpp_name + lib_ext )    # load dynamic librady object using ctypes
 
 # define used numpy array types for interfacing with C++ -----------------------------
 
@@ -101,7 +103,6 @@ array2d = np.ctypeslib.ndpointer(dtype=np.double, ndim=2, flags='CONTIGUOUS')
 array3d = np.ctypeslib.ndpointer(dtype=np.double, ndim=3, flags='CONTIGUOUS')
 array4d = np.ctypeslib.ndpointer(dtype=np.double, ndim=4, flags='CONTIGUOUS')
 
-print ("here2")
 # python wrape to C++ functions ------------------------------------------------------
 
 #void create_xyzGrid(double *xyzgrid, int * dims, double *vox_vec, double *g_null){
@@ -320,7 +321,6 @@ def copy_arround_borders(pos,lvs,sd): # sd - safe distance
         print("debug: len(pos2)",len(pos2))
     return pos2;
 
-print("here 4")
 
 # ----  definition of functions here: -------
 def create_biased_cube(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.cube', cube_head=None):
@@ -422,7 +422,6 @@ def create_biased_cube(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.cu
     return ;
 
 # --------- main run -------------------------
-print("here 5")
 
 if runable:
     geom = read(g_file,index=idx );

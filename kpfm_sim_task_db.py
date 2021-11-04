@@ -5,7 +5,6 @@ from kpfm_sim_tasks import Descend_tip_task, Tune_bias_task
 
 eps = 1.0e-13
 
-
 # Class for storing information on separate KPFM simulation tasks to a
 # database. Simulation tasks can be planned and fetched for execution
 # in a batch job later.

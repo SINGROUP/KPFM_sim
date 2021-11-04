@@ -18,10 +18,11 @@ eps = 1.0e-13
 
 nd = 6# number of digits for rounding
 
-debug = False
+debug = True
 
 def prepare_db_for_task(global_res_db_file, result_db_file, task_db_file):
     '''
+    --- now moved to -> kpfm_sim_result_db.py <- stayed here for the dependency reasons ---
     prepare_db_for_task(global_res_db_file, result_db_file, task_db_file)
     adjust the result db file and the task db file with the all/last results from the global results file
     only the important parts (scan points and geometry) copied
@@ -48,15 +49,18 @@ def prepare_db_for_task(global_res_db_file, result_db_file, task_db_file):
                         print("Copying scan point {} from {} to scan point {} in {}".format(from_id,
                             global_res_db_file, to_id, result_db_file))
                         tmp, charges = from_db.extract_atoms_object(from_id, get_charges=True, get_model=gm);
+                        pot_data_path = from_db.get_pot_data_path(from_id)
                         if gm:
                             atoms = tmp[0]	
                             model_part = tmp[1]
                             is_fixed = tmp[2]
                             full_model, pos_in_part  = from_db.get_model_part()
-                            print ("debug: model_part",model_part)
-                            print ('debug: is_fixed', is_fixed)
-                            print ('debug: full_model',full_model);
-                            print ('debug: pos_in_part',pos_in_part);
+                            if debug:
+                                print ("debug: model_part",model_part)
+                                print ('debug: is_fixed', is_fixed)
+                                print ('debug: full_model',full_model);
+                                print ('debug: pos_in_part',pos_in_part);
+                                print ('debug: pot_data_path',pot_data_path)
                             to_db.write_atoms(atoms, is_fixed, model_part, simplistic = True)
                             for i in range(len(full_model)):
                                 to_db.write_model_part(full_model[i],pos_in_part[i])
@@ -67,6 +71,8 @@ def prepare_db_for_task(global_res_db_file, result_db_file, task_db_file):
                         #print("debug: atoms.positions", atoms.positions )
                         to_db.write_atomic_geo(to_id, atoms, charges)
                         to_db.write_unit_cell(to_id, atoms)
+                        if pot_data_path is not None:
+                            to_db.write_pot_data_path(to_id,pot_data_path)
                     ####
                     if control_db.get_scan_point_id(x, y, s, V) is None:
                         control_id = control_db.write_scan_point(x, y, s, V, energy)
@@ -76,6 +82,61 @@ def prepare_db_for_task(global_res_db_file, result_db_file, task_db_file):
     print("results and tasks db files updated")
 
 
+def copy_old_files_in_wrkdir(task_name):
+    '''
+    copy files in the directory when task is restarted - useful for a 
+    '''
+    xyz_file_name = task_name + global_const.cp2k_xyz_suffix
+    output_file = task_name + global_const.cp2k_out_suffix
+    input_file = task_name + global_const.cp2k_input_suffix
+    # xyz file
+    try:
+        shutil.copyfile(xyz_file_name+"-2",xyz_file_name+"-3")
+    except:
+        pass # do nothing
+    try:
+        shutil.copyfile(xyz_file_name+"-1",xyz_file_name+"-2")
+    except:
+        pass # do nothing
+    try:
+        shutil.copyfile(xyz_file_name,xyz_file_name+"-1")
+        if debug:
+            print("debug: an old xyz file copied")
+    except:
+        pass # do nothing
+    # output file
+    try:
+        shutil.copyfile(output_file+"-2",output_file+"-3")
+    except:
+        pass # do nothing
+    try:
+        shutil.copyfile(output_file+"-1",output_file+"-2") 
+    except:
+        pass # do nothing
+    try:
+        shutil.copyfile(output_file,output_file+"-1")
+       	if debug:
+       	    print("debug: an old output file copied")
+    except:
+        pass # do nothing
+    # input file
+    try:
+        shutil.copyfile(input_file+"-2",input_file+"-3")
+    except:
+        pass # do nothing
+    try:
+        shutil.copyfile(input_file+"-1",input_file+"-2")
+    except:
+        pass # do nothing
+    try:
+        shutil.copyfile(input_file,input_file+"-1")
+        if debug:
+            print("debug: an old input file copied")
+    except:
+        pass # do nothing
+    #-- end --#
+    
+## ********* THE ACTUAL TASKS CLASSES *********** ##
 class Abstract_task(object, metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=False, wfn=True):

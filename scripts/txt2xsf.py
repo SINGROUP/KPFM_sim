@@ -35,6 +35,9 @@ import pyProbeParticle.cpp_utils      as cpp_utils
 
 debug = False
 
+safe  = False # the safe procudere is checking and working only if all the points are calculated #
+maxz  = None # the amount of z points/ None -- means all. If some points does not exits, they are Inf instead #
+
 Q = 0.00 # for writing a new directory and params.ini #
 K = 1.00 # for writing a new directory and params.ini #
 A = 1.00 # just for F-df in params.ini #
@@ -42,10 +45,14 @@ data_format = "xsf" # xsf or npy #
 
 #*****************    END     *********************************#
 
+minf = 1000000 ;# minimum in all scans ???
+
 #ls = os.listdir()
 ls = [f for f in glob.glob("force_*_dE.txt")]
 lsn = [f.replace("_"," ").replace("x","").replace("y","") for f in ls]
 xys = np.array([[float(f.split()[1]),float(f.split()[2])] for f in lsn])
+
+
 
 if debug:
     print ("debug:")
@@ -53,9 +60,9 @@ if debug:
     print (xys.shape)
     print
 
-mixy = np.array([np.min(xys[:,0]),np.min(xys[:,0])])
-maxy = np.array([np.max(xys[:,0]),np.max(xys[:,0])])
-lxy  = maxy - mixy
+mixy = np.array([np.min(xys[:,0]),np.min(xys[:,1])])
+maxy = np.array([np.max(xys[:,0]),np.max(xys[:,1])])
+lxy  = maxy - mixy # I guess here we expect the same size of /x/and /y/
 xu   = np.sort(np.unique(xys[:,0]))
 yu   = np.sort(np.unique(xys[:,1]))
 dx   = xu[1]-xu[0]
@@ -67,19 +74,27 @@ if debug:
 print ("All the file-names; read overall ",xys.shape[0],"files with these unique X and Y values")
 print (xu)
 print (yu)
-if not (len(xu)*len(yu) == xys.shape[0]) : raise AssertionError ("the amount of unique X * Y values is different from the total amount of files", xys.shape[0])
+if safe: 
+    if not (len(xu)*len(yu) == xys.shape[0]) : raise AssertionError ("the amount of unique X * Y values is different from the total amount of files", xys.shape[0])
+else:
+    print ("no assertion check in this file")
 print ("continue to read the files")
     
-
-f0 = np.genfromtxt("force_x"+str(xys[0,0])+"_y"+str(xys[0,1])+"_dE.txt")
+tmpfilename="force_x"+str(xu[0])+"_y"+str(yu[0])+"_dE.txt"
 if debug:
-    print (f0) # - z asscending
+    print("tmpfilename",tmpfilename)
+f0 = np.genfromtxt(tmpfilename)
+if maxz is not None:
+    f0 = f0[:maxz] # cutting to first maxz points #
+maxc = len(f0)
+if debug:
+    print (f0) # - z descending
     print ("f0[0]",f0[0])
     print ("f0[-1]",f0[-1])
 miz = np.min(f0[:,0])
 maz = np.max(f0[:,0])
 lz = maz - miz
-dz = f0[1,0]-f0[0,0]
+dz = f0[0,0]-f0[1,0] # just be sure, that you have always the same interval between the points in your input files #
 if debug:
     print (miz,maz,lz)
 print (dz)
@@ -88,12 +103,14 @@ lvec = np.array([ [mixy[0],mixy[1],miz],
                   [lxy[0],0.,0.],
                   [0.,lxy[1],0.],
                   [0.,0.,lz]            ] )
-ndim = np.array([len(f0),len(xu),len(yu)] ) # [z, y, x]
+ndim = np.array([len(f0),len(yu),len(xu)] ) # [z, y, x]
 
 print ("lattice vector prepare")
 print ("lvec:",lvec)
 print ("ndim (z,y,x)):",ndim)
 print ("going to read the files themselves")
+
+print ("*** In any case the size of the whole field is based on the SIZE and AMOUNT of points from the FIRST calculated point !!! ***")
 
 xsfout = np.zeros(ndim)
 
@@ -105,13 +122,34 @@ for iy, y in enumerate(yu):
         if debug:
             print ("x,y:",x, y)
             print ("ix,iy:",ix, iy)
-        tmp = np.genfromtxt("force_x"+str(x)+"_y"+str(y)+"_dE.txt")
-        xsfout[:,iy,ix]=tmp[:,1]
+        tmpfilename="force_x"+str(x)+"_y"+str(y)+"_dE.txt"
+        if safe : # there always are the files
+            tmp = np.genfromtxt(tmpfilename)
+        else:
+            try:
+                tmp = np.genfromtxt(tmpfilename)
+                minf = len(tmp) if len(tmp) < minf else minf # maximal amount of points in each 
+                print (ix,iy,"file exist, len(tmp):", len(tmp))
+            except:
+                tmp = np.zeros((maxc,2))
+                tmp+= np.inf # putting there infinity
+                print (ix,iy,"no file")	
+        if len(tmp) == maxc:
+            tmps = tmp[:maxz] # tmps - file to be saved
+        else: # maxz is none -- using length of the first file 
+            if debug:
+                print("debug: maxc, len(tmp)",maxc,len(tmp) )
+            tmps = np.zeros((maxc,2))
+            tmps+= np.inf # putting there infinity
+            ltmp = len(tmp) if len(tmp) <= maxc else maxc
+            tmps[:ltmp] = tmp[:ltmp]
+        xsfout[:,iy,ix]=tmps[::-1,1] # 
 
 print ("all the forces read")
 
 if debug:
     print (xsfout)
+    print ("debug: minf",minf)
     
 dirname = "Q%1.2fK%1.2f" %(Q,K)
 print("saving the dE forces as relaxed_scan for ", dirname)
@@ -131,6 +169,7 @@ print("scanMin        %2.6f  %2.6f    %2.6f   # start of scanning (x,y,z) {for t
 print("scanMax        %2.6f  %2.6f    %2.6f   # end   of scanning (x,y,z) {for tip, so PP is by r0Probe(z) lower}  #" %(maxy[0],maxy[1],maz), file=f)
 print("scanStep       %2.6f  %2.6f    %2.6f   # division of the scanning grid 0.1 is standart  #"                     %(dx,dy,dz),            file=f)
 print("Amplitude      %1.2f                   # [Angstrom] peak-to-peak oscilation amplitude for conversion Fz->df #" %(A),                   file=f)
+print("imageInterpolation None                # gives just full squares instead of interpolated values #" ,                                   file=f)
 f.close()
 
 
@@ -141,4 +180,5 @@ f.close()
 #    k++, {xsf10[[i, j, k]] = xsfin[[maxat1 + a + 10, 1]], 
 #     a = a + 1}]]];
 # --- end --- #
+
 print ("end")

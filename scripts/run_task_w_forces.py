@@ -4,7 +4,7 @@
 import sys, os
 from subprocess import check_output, CalledProcessError
 
-from kpfm_sim_tasks import Descend_tip_task, Tune_bias_task
+from kpfm_sim_tasks import Descend_tip_task, Tune_bias_task, copy_old_files_in_wrkdir
 from kpfm_sim_error_handling import cp2k_error_handling, write_task_info
 from kpfm_sim_task_db import Task_control_db
 import kpfm_sim_global_constants as global_const
@@ -153,6 +153,8 @@ while is_steps_left:
         is_steps_left = task.next_step()
         continue
     
+    # copy files in the directory (if exists to older ones - for possible debugging or contol)
+    copy_old_files_in_wrkdir(task_name)
     # Check which task type was loaded from the database and choose
     # correct CP2k initialization based on that
     cp2k_initializer = CP2k_init(task_name, task.get_atoms_object(save_inds=task.get_save_inds(),xyz_file_name=xyz_file_name))

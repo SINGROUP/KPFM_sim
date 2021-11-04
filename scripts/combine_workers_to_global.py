@@ -9,6 +9,15 @@ from os import path
 import shutil as shu
 #from optparse import OptionParser
 
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! #
+#                                   #
+# WAS importent if 2 workers do     #
+# one line scan; now rather use:    #
+# copy_scan_points_and_wfn_files.py #
+# together with combine_results.sh  #
+# in slurm scripts directory ....   #
+#                                   #
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! #
 
 # where are the database files and worker_paths:
 

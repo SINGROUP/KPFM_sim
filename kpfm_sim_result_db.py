@@ -6,11 +6,25 @@ import sqlite3
 import numpy as np
 from ase import Atoms
 from ase.constraints import FixAtoms
+from ase.io.trajectory import Trajectory
+
+from scipy.interpolate import UnivariateSpline # only for post_processing6;15M6;15m
+
+# important constants: #
+
+eV_to_J = 1.602176565e-19
+au_to_eV = 27.211
+bohr_to_m = 5.2917721092e-11
+au_to_N = au_to_eV*eV_to_J/bohr_to_m
+
+smooth_factor = 1.0e-7
 
 eps = 1.0e-13
 bigeps = 1.0e-6
 
 debug = False
+
+# -- at the end other functions used for handling db when copying, or extracting and post-processing data ... --- #
 
 # Class for storing the results of a KPFM simulation to a database and
 # extracting the results from there.
@@ -83,6 +97,8 @@ class Result_db(object):
                     "periodic_in_x BOOLEAN, periodic_in_y BOOLEAN, periodic_in_z BOOLEAN)")
         cur.execute("CREATE TABLE IF NOT EXISTS atomic_forces(scan_point_id INTEGER, "
                     "atom_id INTEGER, Fx REAL, Fy REAL, Fz REAL)")
+        cur.execute("CREATE TABLE IF NOT EXISTS pot_data_path(scan_point_id INTEGER, "
+                    "pot_path TEXT)")
         self.db_con.commit()
 
 
@@ -342,6 +358,16 @@ class Result_db(object):
         else:
             return None
 
+    def get_pot_data_path(self, scan_point_id):
+        cur = self.db_con.cursor()
+        cur.execute("SELECT pot_path FROM pot_data_path WHERE scan_point_id=?",
+                    (scan_point_id,))
+        row = cur.fetchone()
+        if row is not None:
+            return row["pot_path"]
+        else:
+            return None
+
 
     # (x,y,s) are coordinates of the macroscopic tip.
     # V is the effective bias voltage.
@@ -374,6 +400,11 @@ class Result_db(object):
                     (scan_point_id, wf_path))
         self.db_con.commit()
 
+    def write_pot_data_path(self, scan_point_id, pot_path):
+        cur = self.db_con.cursor()
+        cur.execute("INSERT INTO pot_data_path VALUES(?,?)",
+                    (scan_point_id, pot_path))
+        self.db_con.commit()
 
     def write_output_file(self, scan_point_id, output):
         cur = self.db_con.cursor()
@@ -640,3 +671,298 @@ class Result_db(object):
         cur.execute("DELETE FROM wf_data_path WHERE scan_point_id=?",
                     (scan_point_id,))
         self.db_con.commit()
+
+# ******************************************************************************************************************* #
+# *************   Now the functions for database handling, when something  .... ************************************* #
+# ******************************************************************************************************************* #
+#
+
+def prepare_db_for_task(global_res_db_file, result_db_file, task_db_file):
+    '''
+    prepare_db_for_task(global_res_db_file, result_db_file, task_db_file)
+    adjust the result db file and the task db file with the all/last results from the global results file
+    only the important parts (scan points and geometry) copied
+    '''
+    from_db = Result_db(global_res_db_file)
+    to_db = Result_db(result_db_file)
+    control_db = Result_db(task_db_file)
+    gm = True
+    with from_db:
+        scan_points = from_db.get_all_scan_point_entries()
+        #if scan_points == None:
+        #    print("The global input file was not found; \n DEBUG: from_db",from_db,"\n DEBUG: global_res_db_file",global_res_db_file, "\n" )
+        with to_db :
+            with control_db :
+                for scan_point in scan_points:
+                    from_id = scan_point[0]
+                    x = scan_point[1]
+                    y = scan_point[2]
+                    s = scan_point[3]
+                    V = scan_point[4]
+                    energy = scan_point[5]
+                    if to_db.get_scan_point_id(x, y, s, V) is None:
+                        to_id = to_db.write_scan_point(x, y, s, V, energy)
+                        print("Copying scan point {} from {} to scan point {} in {}".format(from_id,
+                            global_res_db_file, to_id, result_db_file))
+                        tmp, charges = from_db.extract_atoms_object(from_id, get_charges=True, get_model=gm);
+                        pot_data_path = from_db.get_pot_data_path(from_id)
+                        if gm:
+                            atoms = tmp[0]
+                            model_part = tmp[1]
+                            is_fixed = tmp[2]
+                            full_model, pos_in_part  = from_db.get_model_part()
+                            if debug:
+                                print ("debug: model_part",model_part)
+                                print ('debug: is_fixed', is_fixed)
+                                print ('debug: full_model',full_model);
+                                print ('debug: pos_in_part',pos_in_part);
+                                print ('debug: pot_data_path',pot_data_path)
+                            to_db.write_atoms(atoms, is_fixed, model_part, simplistic = True)
+                            for i in range(len(full_model)):
+                                to_db.write_model_part(full_model[i],pos_in_part[i])
+                            gm = False;
+                        else:
+                            atoms = tmp
+                        #print("debug: atoms",atoms)
+                        #print("debug: atoms.positions", atoms.positions )
+                        to_db.write_atomic_geo(to_id, atoms, charges)
+                        to_db.write_unit_cell(to_id, atoms)
+                        if pot_data_path is not None:
+                            to_db.write_pot_data_path(to_id,pot_data_path)
+                    ####
+                    if control_db.get_scan_point_id(x, y, s, V) is None:
+                        control_id = control_db.write_scan_point(x, y, s, V, energy)
+                        print("Copying scan point {} from {} to scan point {} in {}".format(from_id,
+                            global_res_db_file, control_id, task_db_file))
+    print()
+    print("results and tasks db files updated")
+
+def prepare_db_for_small(global_res_db_file, result_db_file):
+    '''
+    prepare_db_for_small(global_res_db_file, result_db_file)
+    adjust the result db file with the all/last results from the global results file
+    only the important parts (scan points and geometry) copied (if not created before)
+    also - it gives total numbers of calculated geometries, and numbers of geometries, that already has calculated potential 
+    '''
+    from_db = Result_db(global_res_db_file)
+    to_db = Result_db(result_db_file)
+    gm = True
+    max_pot_id=0;
+    max_id=None
+    with from_db:
+        scan_points = from_db.get_all_scan_point_entries()
+        with to_db :
+            for scan_point in scan_points:
+                from_id = scan_point[0]
+                x = scan_point[1]
+                y = scan_point[2]
+                s = scan_point[3]
+                V = scan_point[4]
+                energy = scan_point[5]
+                if to_db.get_scan_point_id(x, y, s, V) is None:
+                    to_id = to_db.write_scan_point(x, y, s, V, energy)
+                    print("Copying scan point {} from {} to scan point {} in {}".format(from_id,
+                        global_res_db_file, to_id, result_db_file))
+                    tmp, charges = from_db.extract_atoms_object(from_id, get_charges=True, get_model=gm);
+                    pot_data_path = from_db.get_pot_data_path(from_id)
+                    if gm:
+                        atoms = tmp[0]
+                        model_part = tmp[1]
+                        is_fixed = tmp[2]
+                        full_model, pos_in_part  = from_db.get_model_part()
+                        if debug:
+                            print ("debug: model_part",model_part)
+                            print ('debug: is_fixed', is_fixed)
+                            print ('debug: full_model',full_model);
+                            print ('debug: pos_in_part',pos_in_part);
+                            print ('debug: pot_data_path',pot_data_path)
+                        to_db.write_atoms(atoms, is_fixed, model_part, simplistic = True)
+                        for i in range(len(full_model)):
+                            to_db.write_model_part(full_model[i],pos_in_part[i])
+                        gm = False;
+                    else:
+                        atoms = tmp
+                    to_db.write_atomic_geo(to_id, atoms, charges)
+                    to_db.write_unit_cell(to_id, atoms)
+                    if pot_data_path is not None:
+                        to_db.write_pot_data_path(to_id,pot_data_path)
+                        max_pot_id = from_id #.copy() - int cannot be coppied # here is an assumption, that you have all the E_fields before calculated #
+                    max_id = from_id #.copy() - int cannot be coppied #
+                    ####
+    print()
+    print("result db file updated")
+    if debug:
+        print("debug: max_id, max_pot_id",max_id,max_pot_id)
+    sys.exit()
+    return max_id, max_pot_id ; # total numbers of calculated geometries #
+
+def copy_db_ft(from_db_file, to_db_file, w1_path=None, wo_path=None, wf_ext=None):
+    '''
+    copy_db_ft()
+    '''
+    #w1_path = w1_path if w1_path is not "None" else None
+    #wo_path = wo_path if wo_path is not "None" else None
+    if debug:
+        print ("debug: w1_path, wo_path",w1_path, wo_path)
+    from_db = Result_db(from_db_file)
+    to_db = Result_db(to_db_file)
+    gm = True ## - just to see if the model and fixed part are supposed to be copied #
+    bwfc = True; ecl = [] # # for error message, if problem with wfn copying ##
+    with from_db:
+        scan_points = from_db.get_all_scan_point_entries()
+        #if scan_points == None:
+        #    print("The global input file was not found; \n DEBUG: from_db",from_db,"\n DEBUG: global_res_db_file",global_res_db_file, "\n" )
+        with to_db :
+            for scan_point in scan_points:
+                from_id = scan_point[0]
+                x = scan_point[1]
+                y = scan_point[2]
+                s = scan_point[3]
+                V = scan_point[4]
+                energy = scan_point[5]
+                if to_db.get_scan_point_id(x, y, s, V) is None:
+                    to_id = to_db.write_scan_point(x, y, s, V, energy)
+                    print("Copying scan point {} from {} to scan point {} in {}".format(from_id,
+                            from_db_file, to_id, to_db_file))
+                    gm_tmp = True if (gm and from_id < 2) else False
+                    tmp, charges = from_db.extract_atoms_object(from_id, get_charges=True, get_model=gm_tmp);
+                    forces = from_db.get_atomic_forces(from_id)
+                    output = from_db.extract_output(from_id)
+                    calc_forces_output = from_db.extract_output(from_id, "forces")
+                    wf_path = from_db.get_wf_data_path(from_id)
+                    pot_data_path = from_db.get_pot_data_path(from_id)
+                    if gm_tmp :
+                        atoms = tmp[0]
+                        model_part = tmp[1]
+                        is_fixed = tmp[2]
+                        full_model, pos_in_part  = from_db.get_model_part()
+                        if debug:
+                            print ("debug: model_part",model_part)
+                            print ('debug: is_fixed', is_fixed)
+                            print ('debug: full_model',full_model);
+                            print ('debug: pos_in_part',pos_in_part);
+                            print ('debug: pot_data_path',pot_data_path)
+                        to_db.write_atoms(atoms, is_fixed, model_part, simplistic = True)
+                        for i in range(len(full_model)):
+                            to_db.write_model_part(full_model[i],pos_in_part[i])
+                        gm = False;
+                    else:
+                        atoms = tmp
+                    if debug:
+                        print("debug: atoms",atoms) ; print("debug: atoms.positions", atoms.positions )
+                    to_db.write_atomic_geo(to_id, atoms, charges)
+                    to_db.write_unit_cell(to_id, atoms)
+                    to_db.write_output_file(to_id, output)
+                    if pot_data_path is not None:
+                        to_db.write_pot_data_path(to_id,pot_data_path)
+                    if (wf_path is not None) and (w1_path is not None) and (wo_path is not None) and (wf_ext is not None):
+                        wf_path1 = wo_pth +"/scan_point-"+str(to_id)+"-RESTART."+wf_ext
+                        f_path   = w1_pth +"/"+ wf_path
+                        if debug:
+                            print("wf_ext",wf_ext)
+                            print("wf_path",wf_path)
+                            print("wf_path1",wf_path1)
+                            print("f_path",f_path)
+                        try:
+                            shu.copyfile(f_path,wf_path1)
+                            print ("the wave-function file:",f_path,"was coppied to",wf_path1)
+                        except:
+                            bwfc = False
+                            tmp  = "PROBLEM: CANNOT COPY - the wave-function file: "+f_path+" cannot be coppied to: "+wf_path1
+                            print ( tmp )
+                            ecl.append( tmp )
+                        to_db.write_wf_data_path(to_id, wf_path1)
+    print()
+    print("results and tasks db files updated")
+    #
+    return bwfc, ecl ; # if there are some problems during wf files copying #
+
+# --- functions for post-processing : --- #
+def force_from_energy_fd(s, energies):
+    forces = []
+    for i in range(1, len(s)-1):
+        force = eV_to_J*1.0e10*(energies[i-1]-energies[i+1])/(s[i+1]-s[i-1])
+        forces.append(force)
+    return forces
+
+
+def derivate_force(s, forces):
+    dforces = []
+    for i in range(1, len(s)-1):
+        dforce = (forces[i-1]-forces[i+1])/(s[i+1]-s[i-1])
+        dforces.append(dforce)
+    return dforces
+
+
+def calc_force_curve_from_energy(result_db, x, y, V):
+    energies = []
+    s = []
+    with result_db:
+        scan_points = result_db.get_all_s_scan_points(x, y, V)
+        for point in scan_points:
+            energies.append(result_db.get_energy(point[0])*au_to_eV)
+            s.append(point[1])
+    energies[-1] = energies[-2]
+    energy_array = np.array(energies)
+    s_array = np.array(s)
+    energy_spl = UnivariateSpline(s_array, energy_array, k=3, s=smooth_factor*len(s_array))
+    s_interp = np.linspace(s_array[0], s_array[-1], num=100)
+    energy_array_interp = energy_spl(s_interp)
+    energy_interp_data = np.column_stack((s_interp, energy_array_interp))
+    forces = -eV_to_J*1.0e10*energy_spl(s_array, nu=1)
+    return s_array, energy_array, energy_interp_data, forces
+
+
+def calc_force_curve_from_energy_fd(result_db, x, y, V):
+    energies = []
+    s = []
+    with result_db:
+        scan_points = result_db.get_all_s_scan_points(x, y, V)
+        for point in scan_points:
+            energies.append(result_db.get_energy(point[0])*au_to_eV)
+            s.append(point[1])
+    forces = force_from_energy_fd(s, energies)
+    return s, energies, forces
+
+
+def calc_force_curve(result_db, x, y, V):
+    forces = []
+    ss = []
+    with result_db:
+        scan_points = result_db.get_all_s_scan_points(x, y, V)
+        tip_top_atoms = result_db.get_model_part_atom_ids("tip", "top")
+        tip_center_atoms = result_db.get_model_part_atom_ids("tip", "center")
+        tip_apex_atom = result_db.get_model_part_atom_ids("tip", "apex")
+        sample_top_atoms = result_db.get_model_part_atom_ids("sample", "top")
+        sample_center_atoms = result_db.get_model_part_atom_ids("sample", "center")
+        sample_bottom_atoms = result_db.get_model_part_atom_ids("sample", "bottom")
+        for point in scan_points:
+            scan_point_id = point[0]
+            s = point[1]
+            atomic_forces = result_db.get_atomic_forces(scan_point_id, tip_top_atoms)
+            print ("debug: atomic_forces", atomic_forces)
+            if atomic_forces is not None:
+                ss.append(s)
+                forces.append(np.sum(atomic_forces[:,1])*au_to_N)
+    s_array = np.array(ss)
+    force_array = np.array(forces)
+    return s_array, force_array
+
+
+def extract_geometry_traj(result_db, traj_file, x, y, V):
+    traj = Trajectory(traj_file, "w")
+    with result_db:
+        scan_points = result_db.get_all_s_scan_points(x, y, V)
+        latoms = []
+        for point in scan_points:
+            atoms = result_db.extract_atoms_object(point[0])
+            latoms.append(atoms)
+            #traj.write(atoms)
+            #write(traj_file, atoms)
+        for atoms in latoms[::-1]:
+            traj.write(atoms)
+    del latoms;
+    traj.close()
+
+# The END ??? #
+

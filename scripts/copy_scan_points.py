@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 #!/usr/bin/python
 
+# !!!!!!!!!!!!!!!!!!!!!!!!! #
+#                           #
+#   OLD FILE NOT SUPPORTED  #
+# but possibly running fine #
+#                           #
+# !!!!!!!!!!!!!!!!!!!!!!!!! #
+
 import sys
 from kpfm_sim_result_db import Result_db
 
@@ -33,6 +40,8 @@ with from_db:
                 output = from_db.extract_output(from_id)
                 calc_forces_output = from_db.extract_output(from_id, "forces")
                 wf_path = from_db.get_wf_data_path(from_id)
+                pot_data_path = from_db.get_pot_data_path(from_id)
+
                 
                 to_db.write_atomic_geo(to_id, atoms, charges)
                 to_db.write_unit_cell(to_id, atoms)
