@@ -737,18 +737,19 @@ def prepare_db_for_task(global_res_db_file, result_db_file, task_db_file):
     print()
     print("results and tasks db files updated")
 
-def prepare_db_for_small(global_res_db_file, result_db_file):
+def prepare_db_for_small(global_res_db_file, result_db_file,pxy=None):
     '''
-    prepare_db_for_small(global_res_db_file, result_db_file)
+    prepare_db_for_small(global_res_db_file, result_db_file,pxy=None)
     adjust the result db file with the all/last results from the global results file
     only the important parts (scan points and geometry) copied (if not created before)
-    also - it gives total numbers of calculated geometries, and numbers of geometries, that already has calculated potential 
+    pxy - None or 2 floats /x/ and /y/ for points for which you want to calculate for only one /z/ scan
+    also - it gives total numbers of calculated geometries, and numbers of relevant() geometries that already does not have a potential
+    !!! ASUMPTION: there are the same 
     '''
     from_db = Result_db(global_res_db_file)
     to_db = Result_db(result_db_file)
-    gm = True
-    max_pot_id=0;
-    max_id=None
+    gm = True # get_full_model #
+    ids=[]; pot_ids1=[]; pot_ids2=[] # ids - all the (relevant) IDS for which one can calculate potentials ; pot_ids - IDS for which the potential is calculated #
     with from_db:
         scan_points = from_db.get_all_scan_point_entries()
         with to_db :
@@ -759,10 +760,19 @@ def prepare_db_for_small(global_res_db_file, result_db_file):
                 s = scan_point[3]
                 V = scan_point[4]
                 energy = scan_point[5]
-                if to_db.get_scan_point_id(x, y, s, V) is None:
+                if abs(V) < eps:
+                    if pxy is None:
+                        ids.append(from_id)
+                    else: # pxy = [x,y]
+                        if (abs(x - pxy[0])<eps) and (abs(y - pxy[1])<eps):
+                            ids.append(from_id)
+                to_scan_point = to_db.get_scan_point_id(x, y, s, V)
+                if to_scan_point is None: #to_db.get_scan_point_id(x, y, s, V) is None:
                     to_id = to_db.write_scan_point(x, y, s, V, energy)
                     print("Copying scan point {} from {} to scan point {} in {}".format(from_id,
                         global_res_db_file, to_id, result_db_file))
+                    gm = gm if to_id < 2 else False ; #not to get and write full model, if you are copying to already partially written file#
+                    # print ("debug: gm",gm)
                     tmp, charges = from_db.extract_atoms_object(from_id, get_charges=True, get_model=gm);
                     pot_data_path = from_db.get_pot_data_path(from_id)
                     if gm:
@@ -786,15 +796,21 @@ def prepare_db_for_small(global_res_db_file, result_db_file):
                     to_db.write_unit_cell(to_id, atoms)
                     if pot_data_path is not None:
                         to_db.write_pot_data_path(to_id,pot_data_path)
-                        max_pot_id = from_id #.copy() - int cannot be coppied # here is an assumption, that you have all the E_fields before calculated #
-                    max_id = from_id #.copy() - int cannot be coppied #
+                        pot_ids1.append(from_id) 
+                else: #->to_db.get_scan_point_id(x,y,s,V) is not None:
+                    # print ("debug: to_scan_point",to_scan_point) ; exit()
+                    if to_db.get_pot_data_path(to_scan_point) is not None :
+                        pot_ids2.append(from_id)
+                        print ("potential for ",to_scan_point," is already calculated")
                     ####
     print()
-    print("result db file updated")
-    if debug:
-        print("debug: max_id, max_pot_id",max_id,max_pot_id)
-    sys.exit()
-    return max_id, max_pot_id ; # total numbers of calculated geometries #
+    print("result db file updated; calculating the relevant non-calculated ids")
+    ids = np.array(ids, dtype = np.int32)
+    pot_ids = np.union1d(np.array(pot_ids1, dtype = np.int32),np.array(pot_ids2, dtype = np.int32))
+    mask = np.isin(ids,pot_ids, invert=True); no_pot_ids = ids[mask]
+    if True:
+        print("debug:  no_pot_id", no_pot_ids)
+    return no_pot_ids ; # list of numbers of (relevant) geometries, that doesn't have potential calculated #
 
 def copy_db_ft(from_db_file, to_db_file, w1_path=None, wo_path=None, wf_ext=None):
     '''
@@ -940,7 +956,9 @@ def calc_force_curve(result_db, x, y, V):
             scan_point_id = point[0]
             s = point[1]
             atomic_forces = result_db.get_atomic_forces(scan_point_id, tip_top_atoms)
-            print ("debug: atomic_forces", atomic_forces)
+            if debug:
+                print ("debug: atomic_forces", atomic_forces)
+            print ("debug: len(atomic_forces)", scan_point_id, len(atomic_forces))
             if atomic_forces is not None:
                 ss.append(s)
                 forces.append(np.sum(atomic_forces[:,1])*au_to_N)

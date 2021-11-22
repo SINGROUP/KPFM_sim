@@ -71,7 +71,7 @@ with results:
     no_forces_scan_points = results.get_no_forces_scan_points()
     if b_loc:
         loc_points= results.get_all_s_scan_points(point[0], point[1], V=point[2])
-        lpids = np.array(loc_points[:][0],dtype=np.int32) # loc point ids
+        lpids = np.array([ i[0] for i in loc_points],dtype=np.int32) # loc point ids
         if debug:
             print ("debug: loc_points",loc_points)
             print ("debug: lpids", lpids)

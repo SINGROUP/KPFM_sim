@@ -43,9 +43,10 @@ eV_to_au = 0.03674932540261308                                   #
 lib_ext   ='_lib.so'                                             #
 #                                                                #
 # ***************** PARAMETERS ********************************* #
-runable = False;
-debug = True ; #True
-save_pre_opt = True ; 
+runable      = False ;# use false all over here, unless debugging#
+debug        = False ;
+save_pre_opt = False ; 
+save_npy     = True  ;
 # ----------------- Main parameters ---------------------------- #
 
 g_file = 'geometry_x0.0_y0.0.traj'; # from where the geometry is taken - in the future this is supposed to be from the data base
@@ -183,18 +184,19 @@ def prepare_V(fixtop,fixbot,fixnum, V_tip,n_add,dims):
     return V, optind;
 
 #     void opt_V( int n_add, int * dims_small, int *optind, double * V, double * Vout, float prec, int precond, int inner_step){ // prec - precission
-lib.opt_V.argtypes = [ c_int ,     array1i,      array1i,    array3d ,     array3d ,   c_double ,     c_int ,         c_int]
+lib.opt_V.argtypes = [ c_int ,     array1i,      array1i,    array3d ,     array3d ,   c_double ,     c_int ,         c_int,  c_int]
 lib.opt_V.restype = None
-def opt_V(n_add, dims, optind, V, prec, precond,inner_step=1000):
+def opt_V(n_add, dims, optind, V, prec, precond,inner_step=1000, idx=0):
     # full C++ procedure for calculating the potential - via iterative solving of the Laplace equation in the optind voxels - indices of voxels, that are optimized #
     # n_add - amount of added voxels on /x/ and /z/ sides; dims (nx , ny, nz) - dimensions of the inner V field ; prec - maximal difference between (control) steps ... #
     # ... so the consistency is achieved (<1e-6 seems to be fine); precond - idea about faster preconditioner, no advantages in the control run ; #
     # inner_step ... amount of steps in between the control steps - 1000 seems to be fine, since the control step is much slower, than the normal step. #
+    # idx - index -- rank of the cpu core, if mpi is used (otherwised 0) #
     dims = np.array(dims,dtype=np.int32);
     Vtmp = V.copy()
     if debug:
         print("debug: prec", prec)
-    lib.opt_V( int(n_add), dims ,  optind, V, Vtmp, prec, precond, inner_step)
+    lib.opt_V( int(n_add), dims ,  optind, V, Vtmp, prec, precond, inner_step, idx)
     if debug:
         print("debug: Vout - V:", Vtmp-V)
     return V;
@@ -229,8 +231,6 @@ def save_cube_c(density, mol_xyz, grid_origin, grid_vec, file_path='pot.cube'):
     data *= eV_to_au ; # scalling to atoic units #
     lib.writeCube(n_at, mol_Z, xyz, g_o, g_v , dims, data, file_path.encode());
     print("--- Cube file written ---")
-
-print("here 3")
 
 
 # functions: ---------------------------------------------------------------------------
@@ -269,7 +269,7 @@ def save_cube(density, mol_xyz, grid_origin, grid_vec, file_path='hartree.cube',
                 # f.write('\n') # !! This part is noy in CP2K !!#
 
 
-def separate_top_bottom(z_pos,cc,fi): # cc -centre
+def separate_top_bottom(z_pos,cc,fi): # z_pos - z(/y/ in xyz file) positions of all atoms ; cc -centre ; fi - fixed atoms indices #
     # function that creates 4 array - ti (top atom indices); bi (bottom atom indices); fit (indices of top fixed atoms); fib (indices of bottom fixed atoms). #
     # from the height of atoms (ff), position of the dividing centre (cc) and indices of the fixed atoms (fi). #
     nat=len(z_pos);nfat=len(fi)
@@ -323,10 +323,12 @@ def copy_arround_borders(pos,lvs,sd): # sd - safe distance
 
 
 # ----  definition of functions here: -------
-def create_biased_cube(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.cube', cube_head=None):
+def create_biased_cube(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.cube', cube_head=None, cc=cc, idx=0):
     '''
     the main function, that for given geometry in an ASE objec that is given in **geom** and prepare the electrostatic potential for the Tip-Sample system with tip voltage **Vtip** #
     the final cube file is written into the **final_pot_name** file (this way multiple functions can be runned in the same time); cube_head is important for the exact match with the cp2k code #
+    **cc** is centre of the geometry - plane which decided what is __tip__ (above) and what is __sample__ (below);
+    **idx*** -- rank of CPU, when MPI is used, otherwise 0 -> for finding out, from which core the output came from ;
     !!! beware CP2K code is super strict, only the python save_cube is working properly for writing the cube file as it seems. #
     '''
     print ("Going to create KPFM (metallic) tip-sample electrostatic field -- for given geometry and creates cube file:", final_pot_name);
@@ -412,10 +414,11 @@ def create_biased_cube(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.cu
         print ("debug: Vtmp2-Varr", Vtmp2-Varr)
         print ("debug: optind", optind)
     print("optimizing the field through iterations, all in C++")
-    Varr = opt_V(n_add, ndim, optind, Varr, zer, precond,inner_step=inner_step)
+    Varr = opt_V(n_add, ndim, optind, Varr, zer, precond,inner_step=inner_step, idx=idx)
     # !!!! still some weird behaviour on the edges .... !!!! #
     print ("fully optimized potential - going to saving;")
-    np.save(final_pot_name+"npy",Varr[n_add:nx+n_add,:,n_add:nz+n_add])
+    if save_npy:
+        np.save(final_pot_name+"npy",Varr[n_add:nx+n_add,:,n_add:nz+n_add])
     save_cube(Varr[n_add:nx+n_add,:,n_add:nz+n_add],mol_xyz,g_or,g_vec,file_path=final_pot_name, cube_head=cube_head) # y is no longer larger - not needed
     #GU.save_scal_field( 'V_out', Varr[n_add:nx+n_add,n_add:ny+n_add,n_add:nz+n_add], lvec, data_format="xsf" ,cube_head=cube_head)
     print ("Everything saved for given geometry and cube file:", final_pot_name);
@@ -425,7 +428,7 @@ def create_biased_cube(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.cu
 
 if runable:
     geom = read(g_file,index=idx );
-    create_biased_cube(geom,V_tipfinal_pot_name=g_file+"_"+str(idx)+"_final_pot.cube");
+    create_biased_cube(geom,V_tipfinal_pot_name=g_file+"_"+str(idx)+"_final_pot.cube",cc=cc);
     print ("--- done ---")
 
 #

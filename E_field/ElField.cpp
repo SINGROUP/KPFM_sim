@@ -296,7 +296,7 @@ extern "C" {
         printf("end of c++ \n");
     }
 
-    void opt_V( int n_add, int * dims_small, int *optind, double * V, double * Vout , double prec, int precond, int innerstep){ // prec - precission
+    void opt_V( int n_add, int * dims_small, int *optind, double * V, double * Vout , double prec, int precond, int innerstep, int idx){ // prec - precission
         printf("inside opt_V \n");
         int sx = dims_small[0];
         int sy = dims_small[1];
@@ -314,7 +314,7 @@ extern "C" {
         int st = 1; //printf("after st \n");
         int maxstep = 100000; //printf("after maxstep \n"); // outer step
         //printf("debug: prec %4.10f prec \n");
-        printf("opt step: \n");
+        printf("Go into opt: %d \n",idx);
         if (precond == 1){
             printf("going to preconditioner");
             for (int ist=n_add; ist>0; ist--){
@@ -323,7 +323,7 @@ extern "C" {
             }
         }
         for (int istep=0; istep<maxstep; istep++){//while (diff > prec){
-            printf("%d ",istep);
+            printf("INDEX: %d ; OptStep: %d ",idx, istep);
             m_step( Vout, V, optind, dims_small, n_add, aidx, st, yl, xl, innerstep);
             diff = one_step_w_control( Vout, V, optind, dims_small, n_add, aidx, st, yl, xl);
             /*

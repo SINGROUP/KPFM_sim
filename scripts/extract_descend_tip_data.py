@@ -12,7 +12,7 @@ from kpfm_sim_result_db import *
 from optparse import OptionParser
 
 
-erm = "Usage: python copy_scan_points_and_wfn_files.py -i from_db_file -o to_db_file (-w <worker_path>  <results_wfn_path> ) (--kpts)"
+erm = "Usage: python extract_descent_tip_data.py -i result_db_file -p x_tip y_tip (--no_forces) (--visualize)"
 debug = True
 parser = OptionParser()
 parser.add_option('-i', '--input_db_file', action ="store", type="string", nargs=1,

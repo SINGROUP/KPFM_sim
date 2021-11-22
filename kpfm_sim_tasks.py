@@ -8,17 +8,22 @@ from ase.io import read
 from kpfm_sim_result_db import Result_db
 from cp2k_output_tools import get_output_from_file, get_energy_from_output,\
                                 get_charges_from_output, get_forces_from_output
-from axisym_pot_to_cube import axisym_pot_in_db_to_cube
-from macro_gap_efield import calc_macro_gap_efield
 import kpfm_sim_global_constants as global_const
 
 import numpy as np
+
+style_metallic = True # new style of dealing with electrostatics, ommitting the original procedures and cython#
+
+if not style_metallic:
+    from axisym_pot_to_cube import axisym_pot_in_db_to_cube
+    from macro_gap_efield import calc_macro_gap_efield
+
 
 eps = 1.0e-13
 
 nd = 6# number of digits for rounding
 
-debug = True
+debug = False
 
 def prepare_db_for_task(global_res_db_file, result_db_file, task_db_file):
     '''
@@ -455,11 +460,19 @@ class Descend_tip_task(Abstract_task):
                 init_source.extract_wf_data(init_scan_point_id, wfn_file_name, self.project_path)
         
         elif abs(self.V) < eps:
+            # now we want to use already calculated geometries and do not do any optimization #
+            # The original scripts are left here 
             with self.results:
-                scan_points = self.results.get_all_s_scan_points(0.0, 0.0)
+                if style_metallic:
+                    scan_points = self.results.get_all_s_scan_points(self.x,self.y)
+                else:
+                    can_points = self.results.get_all_s_scan_points(0.0, 0.0)
             if not scan_points:
                 with self.global_results:
-                    scan_points = self.global_results.get_all_s_scan_points(0.0, 0.0)
+                    if style_metallic:
+                        scan_points = self.global_results.get_all_s_scan_points(self.x,self.y)
+                    else:
+                        can_points = self.global_results.get_all_s_scan_points(0.0, 0.0)
                 if not scan_points:
                     raise Exception("Could not find suitable initial scan point from the results databases.")
                 init_source = self.global_results
@@ -504,14 +517,18 @@ class Descend_tip_task(Abstract_task):
             
             # Calculate average electric field in the gap of the macroscopic model from
             # the electrostatic potential
-            if global_const.use_uniform_efield:
+            if global_const.use_uniform_efield and not style_metallic:
                 self.E_per_V = calc_macro_gap_efield(self.s, self.global_results)
             # Extracts external electrostatic potential from the results database
             # interpolating with respect to values of s and writes it to file "pot.cube"
             else:
                 with self.global_results:
-                    axisym_pot_in_db_to_cube(global_const.cp2k_extpot_file, self.s,
+                    if not style_metallic:
+                        axisym_pot_in_db_to_cube(global_const.cp2k_extpot_file, self.s,
                                                 self.atoms, self.global_results)
+                    else: # style_metallic: #
+                        print ("going to recall the potential from precalculated E_field procedures" )
+                        # TO BE WRITTEN -- HERE !!! #
         
         self.calc_initialized = True
 
