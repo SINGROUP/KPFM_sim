@@ -24,6 +24,7 @@ debug = False
 
 task_name = "afm_task"
 task_types = ["descend_tip"] #, "tune_bias"]
+style_metallic = True # new style for calculating under electric field #
 
 # end basic settings#
 
@@ -53,7 +54,9 @@ parser.add_option('-k', '--kpts', action='store_true', default = False,
 parser.add_option('-w', '--no_wfn', action='store_false', default = True, 
                     help="do not store the wfn or kp file for late recalculations")
 parser.add_option('-n', '--no_forces', action='store_false', default = True, 
-                    help="do not store the forces")
+                    help="do not store the forces -- for running with V != 0 use this ")
+parser.add_option('-p', '--ef_fol', action ="store", type="string", nargs=1,
+                    help="<path> towards e_field folder. If default value, is used, then pwd command is used instead")
 (options,args) = parser.parse_args()
 
 if debug:
@@ -64,6 +67,7 @@ if debug:
     print("options.kpts",options.kpts)
     print("options.no_wfn",options.no_wfn)
     print("options.no_forces",options.no_forces)
+    print("options.ef_fol",options.ef_fol)
 
 if (options.files == None) or (options.slurm_id == None):
     sys.exit(erm)
@@ -85,6 +89,8 @@ task_db_path = os.path.join(worker_path, task_db_file)
 
 task_db = Task_control_db(task_db_path)
 
+e_field_path = options.ef_fol if options.ef_fol != None else os.getcwd()
+
 if debug: 
     print("kpts",kpts)
     print("worker_dir  ",worker_dir )
@@ -92,7 +98,6 @@ if debug:
     print("task_db_file",task_db_file)
     print("task_db_path",task_db_path)
     print("task_db     ",task_db_path)
-    #sys.exit()
 
 # Make sure that the fetched task is reserved so that it is not fetched by
 # another slurm job at the same time
@@ -102,7 +107,7 @@ with task_db:
         raise Exception("No active tasks found using the constraints: "
                         "type = {}, state = {}.".format(task_type_constraint, task_state_constraint))
 write_task_info(task_id, task_name)
-task.init_calculation(task_name, project_path, worker_path)
+task.init_calculation(task_name, project_path, worker_path, e_field_path = e_field_path)
 
 cp2k_restart_exists = False ## We try to put there automatic restart ##
 print("Type of the task = {}, state of the task = {}".format(task.task_type, task.state))
@@ -182,6 +187,25 @@ while is_steps_left:
         task.update_atoms_object(xyz_file_name)
     except IOError:
         cp2k_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
+    if isinstance(task, Descend_tip_task) and abs(task.V) > 10**-10 and style_metallic:
+        tmpV = task.V
+        print("Debug: tmpV, task.V", tmpV, task.V)
+        task.V = task.V+100.0 if task.V > 0 else task.V-100.0
+        print("Debug: tmpV, task.V", tmpV, task.V)
+        task.write_step_results_to_db( task_name+".out", kpts=kpts, bForces = bForces, wfnStore = wfnStore ) # write as super high or low voltage - just to have it #
+        task.V = tmpV
+        print("Debug: tmpV, task.V", tmpV, task.V) # - note we know, that the restart with previous geometry is not working OK.
+        cp2k_initializer = CP2k_init(task_name, task.get_atoms_object(save_inds=task.get_save_inds(),xyz_file_name=xyz_file_name))
+        cp2k_calc = cp2k_initializer.init_voltage_rerun()
+        try:
+            print("Re-Running simulation at scan point x = {}, y = {}, s = {}, V = {}".format(task.x,
+                    task.y, task.s, task.V))
+            #cp2k_calc.write_input_file()
+            cp2k_calc.run()
+        except CalledProcessError:
+            cp2k_error_handling(task_id, task_name, slurm_id, project_path, worker_path, task_db)
+        # atomic object not needed - it is the same for this if ... #
+        print ("---- the second run for the same height finnished, go to writing results --- ")
     task.write_step_results_to_db( task_name+".out", kpts=kpts, bForces = bForces, wfnStore = wfnStore )
     #task.write_step_results_to_db(get_output_path(worker_dir,task_name))
     is_steps_left = task.next_step()

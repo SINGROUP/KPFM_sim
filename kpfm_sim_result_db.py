@@ -22,6 +22,8 @@ smooth_factor = 1.0e-7
 eps = 1.0e-13
 bigeps = 1.0e-6
 
+nd = 6 # number of digits to round
+
 debug = False
 
 # -- at the end other functions used for handling db when copying, or extracting and post-processing data ... --- #
@@ -358,7 +360,7 @@ class Result_db(object):
         else:
             return None
 
-    def get_pot_data_path(self, scan_point_id):
+    def get_pot_data_path(self, scan_point_id, point=None, V= 0. ):
         cur = self.db_con.cursor()
         cur.execute("SELECT pot_path FROM pot_data_path WHERE scan_point_id=?",
                     (scan_point_id,))
@@ -366,7 +368,24 @@ class Result_db(object):
         if row is not None:
             return row["pot_path"]
         else:
-            return None
+            print("D: path not found for this")
+            print("DL V, point",V, point)
+            if abs(V > eps):
+                now_id_tmp = get_scan_point_id(point[0], point[1], point[2], 0.0)
+                print("D: now_id_tmp",now_id_tmp)
+                cur = self.db_con.cursor()
+                cur.execute("SELECT pot_path FROM pot_data_path WHERE scan_point_id=?",
+                    (scan_point_id,))
+                row = cur.fetchone()
+                print ("D: row",row)
+                if row is not None:
+                    return row["pot_path"]
+                else:
+                    print("STILL NO PATH FOUND")
+                    return None
+            else:
+                print("!!! Path not found at all, or something went wrong!!!")
+                return None
 
 
     # (x,y,s) are coordinates of the macroscopic tip.
@@ -453,11 +472,20 @@ class Result_db(object):
     # mulliken_charge is a list or rank-1 array with elements for each atom
     def write_atomic_geo(self, scan_point_id, atoms_model, mulliken_charge):
         cur = self.db_con.cursor()
-        for atom_i, atom in enumerate(atoms_model):
-            pos = atom.position
-            cur.execute("INSERT INTO atomic_geometry VALUES(?,?,?,?,?,?)",
-                        (scan_point_id, atom_i, pos[0], pos[1], pos[2],
-                        mulliken_charge[atom_i]))
+        if mulliken_charge is not None:
+            for atom_i, atom in enumerate(atoms_model):
+                pos = atom.position
+                cur.execute("INSERT INTO atomic_geometry VALUES(?,?,?,?,?,?)",
+                            (scan_point_id, atom_i, pos[0], pos[1], pos[2],
+                            mulliken_charge[atom_i]))
+        else: # charges = None #
+            for atom_i, atom in enumerate(atoms_model):
+                pos = atom.position
+                tmp_val = None
+                cur.execute("INSERT INTO atomic_geometry VALUES(?,?,?,?,?,?)",
+                            (scan_point_id, atom_i, pos[0], pos[1], pos[2],
+                            tmp_val)) # putting there NULL
+        
         self.db_con.commit()
 
 
@@ -619,6 +647,8 @@ class Result_db(object):
         atoms_model.set_cell([row["a"], row["b"], row["c"]])
         atoms_model.set_pbc([row["periodic_in_x"], row["periodic_in_y"],
                                 row["periodic_in_z"]])
+        print ("D atoms_model",atoms_model)
+        print ("D fixed_atoms_inds",fixed_atom_inds)
         fix_bulk = FixAtoms(fixed_atom_inds)
         atoms_model.set_constraint(fix_bulk)
         
@@ -910,17 +940,26 @@ def derivate_force(s, forces):
     return dforces
 
 
-def calc_force_curve_from_energy(result_db, x, y, V):
+def calc_force_curve_from_energy(result_db, x, y, V,  ignore_first = False):
+    debug = True
     energies = []
     s = []
     with result_db:
         scan_points = result_db.get_all_s_scan_points(x, y, V)
         for point in scan_points:
             energies.append(result_db.get_energy(point[0])*au_to_eV)
-            s.append(point[1])
+            s.append(round(point[1],nd))
+    if ignore_first:
+        s=s[:-1]
+        energies=energies[:-1]
+    if debug:
+        print("D: energies,l",energies,len(energies))
     energies[-1] = energies[-2]
     energy_array = np.array(energies)
     s_array = np.array(s)
+    if debug:
+        print("D: energy_array,l",energy_array,len(energy_array))
+        print("D: s_array,l",s_array,len(s_array))
     energy_spl = UnivariateSpline(s_array, energy_array, k=3, s=smooth_factor*len(s_array))
     s_interp = np.linspace(s_array[0], s_array[-1], num=100)
     energy_array_interp = energy_spl(s_interp)

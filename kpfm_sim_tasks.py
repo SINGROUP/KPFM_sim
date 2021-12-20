@@ -144,7 +144,7 @@ def copy_old_files_in_wrkdir(task_name):
 ## ********* THE ACTUAL TASKS CLASSES *********** ##
 class Abstract_task(object, metaclass=ABCMeta):
     @abstractmethod
-    def __init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=False, wfn=True):
+    def __init__(self, x, y, s, V, result_db_file, global_res_db_file, state, slurm_id, kpts=False, wfn=True,):
         self.x = round(x,nd)
         self.y = round(y,nd)
         self.s = round(s,nd)
@@ -159,6 +159,7 @@ class Abstract_task(object, metaclass=ABCMeta):
         self.wfn = wfn
         self.tip_save_ind = None ## they are supposed to be named *safe* ##
         self.sample_save_ind = None
+        self.pot_path = None
 
 
     @abstractmethod
@@ -167,10 +168,11 @@ class Abstract_task(object, metaclass=ABCMeta):
 
 
     @abstractmethod
-    def init_calculation(self, task_name, project_path, worker_path):
+    def init_calculation(self, task_name, project_path, worker_path, e_field_path=None):
         self.task_name = task_name
         self.project_path = project_path
         self.worker_path = worker_path
+        self.e_field_path = e_field_path
         # Test for absolute path for backward compatibility
         if os.path.isabs(self.result_db_file):
             result_db_path = self.result_db_file
@@ -246,6 +248,17 @@ class Abstract_task(object, metaclass=ABCMeta):
         else:
             raise Exception("Could not get atoms object from task because the calculation was not initialized.")
 
+    def get_pot_path(self, scan_point_id):
+        erm = "Could not get the potential path for id:" + str(scan_point_id)
+        try:
+            tmp =  self.get_pot_data_path(self, scan_point_id)
+            print ("D: pot_path - tmp:",tmp)
+            if tmp is not None:
+                return tmp;
+            else:
+                raise Exception (erm);
+        except:
+            raise Exception(erm);
 
     # ---  Maybe to be completely omitted  ---
     def get_restart_data(self):
@@ -272,9 +285,12 @@ class Abstract_task(object, metaclass=ABCMeta):
 
 
     def update_atoms_object(self, xyz_file):
-        new_atoms = read(xyz_file, format='xyz')
-        self.atoms.positions = new_atoms.get_positions()
-        os.remove(xyz_file)
+        try:
+            new_atoms = read(xyz_file, format='xyz')
+            self.atoms.positions = new_atoms.get_positions()
+            os.remove(xyz_file)
+        except:
+            print("!!!!! BEWARE - no new atoms calculated -- check if this is right or not !!!!!")
 
 
     def write_step_results_to_db(self, cp2k_output_path, kpts=False,bForces=False,wfnStore=True):
@@ -284,11 +300,16 @@ class Abstract_task(object, metaclass=ABCMeta):
             print ("debug: wfn_file_name" , wfn_file_name )
         cp2k_output = get_output_from_file(cp2k_output_path)
         energy = get_energy_from_output(cp2k_output)
-        charges = get_charges_from_output(cp2k_output)
+        try:
+            charges = get_charges_from_output(cp2k_output)
+        except:
+            charges = None
         forces = get_forces_from_output(cp2k_output) if bForces else None
+        # note: potential is not written, as it calculated wiht separate procedure #
         
         with self.results:
             scan_point_id = self.results.write_scan_point(self.x, self.y, self.s, self.V, energy)
+            print("Debug: scan_point_id",scan_point_id)
             if scan_point_id is None:
                 raise Exception("Tried to write scan point that already exists in the results database.")
             self.results.write_atomic_geo(scan_point_id, self.atoms, charges)
@@ -301,7 +322,10 @@ class Abstract_task(object, metaclass=ABCMeta):
                 self.results.write_wf_data_path(scan_point_id, wfn_rel_storage_path)
         
         os.remove(cp2k_output_path)
-        os.remove(self.task_name + global_const.cp2k_restart_suffix)
+        try:
+            os.remove(self.task_name + global_const.cp2k_restart_suffix)
+        except:
+            print("!!!!! -- no cp2k-opt-restart file found -- !!!!!!")
 
 
     def is_scan_point_in_db(self):
@@ -368,6 +392,29 @@ class Descend_tip_task(Abstract_task):
                 atom.position[2] = atom.position[2] + translation_vec[1]
 
 
+    def prepare_metallic(self):
+        '''
+        let see ??
+        '''
+        tmp_src=self.worker_path+global_const.cp2k_extpot_file
+        try:
+            os.unlink(tmp_src)
+            print("removing link for old potential",tmp_src)
+        except:
+            print("no previous potential in the working directory", tmp_src)
+        tmp_src = self.e_field_path + self.pot_path
+        tmp_dest = self.worker_path + global_const.cp2k_extpot_file
+        if debug:
+            print ("D: result_db_file",self.result_db_file)
+            print ("D: project_path", self.project_path)
+            print ("D: worker_path",self.worker_path)
+            print ("D: e_field_path", self.e_field_path)
+            print ("D: e_field_path+pot_path", tmp_src)
+            print ("D: tmp_dest", tmp_dest)
+        os.symlink(tmp_src, tmp_dest)
+        print("symlink created")
+
+
     # Translate tip in z (y) axis according to the s_start
     def start_tip(self):
         if debug:
@@ -378,14 +425,50 @@ class Descend_tip_task(Abstract_task):
                 if atom.index in self.tip_atom_inds:
                     atom.position[1] = atom.position[1] + self.s_start-self.s
             self.s=self.s_start
+            if (abs(self.V) > eps ) and style_metallic:
+                print("adapting geometry and linking potential according to metallic style") 
+                init_source = self.results # here we are working with results only #
+                wfn_file_name = self.task_name + global_const.cp2k_wfn_suffix(kpts=self.kpts)
+                with init_source:
+                    now_scan_point_id = init_source.get_scan_point_id(self.x, self.y, self.s, 0.0)
+                    print("now_scan_point_id, x, y, s", now_scan_point_id, self.x, self.y, self.s)
+                    self.atoms = init_source.extract_atoms_object(now_scan_point_id)
+                    if self.atoms is None:
+                        raise Exception("Could not obtain initial atoms object from the results database.")
+                    # the question is what happens happens after
+                    self.tip_atom_inds = init_source.get_model_part_atom_ids("tip")
+                    self.sample_atom_inds = init_source.get_model_part_atom_ids("sample")
+                    init_source.extract_wf_data(now_scan_point_id, wfn_file_name, self.project_path)
+                    # do not know, what the wf is doing here, but let's leave it here
+                    self.pot_path = init_source.get_pot_data_path(now_scan_point_id)
+                    print("D: self.pot_path",self.pot_path)
+                self.prepare_metallic()
+                #tmp_src=self.worker_path+global_const.cp2k_extpot_file
+                #try:
+                #    os.unlink(tmp_src)
+                #    print("removing link for old potential",tmp_src)
+                #except:
+                #    print("no previous potential in the working directory", tmp_src)
+                #tmp_src = self.e_field_path + self.pot_path
+                #tmp_dest = self.worker_path + global_const.cp2k_extpot_file
+                #if debug:
+                #    print ("D: result_db_file",self.result_db_file)
+                #    print ("D: project_path", self.project_path)
+                #    print ("D: worker_path",self.worker_path)
+                #    print ("D: e_field_path", self.e_field_path)
+                #    print ("D: e_field_path+pot_path", tmp_src)
+                #    print ("D: tmp_dest", tmp_dest)
+                #os.symlink(tmp_src, tmp_dest)
+                #print("symlink created")
         if debug:
             print("debug tip atoms adjusted")
 
 
+
     # Get the initial atomic model from the results database and move the tip
     # to its current location
-    def init_calculation(self, task_name, project_path, worker_path):
-        Abstract_task.init_calculation(self, task_name, project_path, worker_path)
+    def init_calculation(self, task_name, project_path, worker_path,e_field_path=None):
+        Abstract_task.init_calculation(self, task_name, project_path, worker_path, e_field_path=e_field_path)
         if debug:
             print ("DEBUG: inside init calculation")
         
@@ -440,39 +523,87 @@ class Descend_tip_task(Abstract_task):
                 self.descend_tip(init_s_step)
             
         elif abs(self.V) > eps:
-            with self.results:
-                init_scan_point_id = self.results.get_scan_point_id(self.x, self.y, self.s, 0.0)
-            if init_scan_point_id is None:
-                with self.global_results:
-                    init_scan_point_id = self.global_results.get_scan_point_id(self.x, self.y, self.s, 0.0)
-                if init_scan_point_id is None:
-                    raise Exception("Tried to init bias voltage tuning at tip position that does not exist.")
-                init_source = self.global_results
+            if False: # used just for debugging and getting ideas #
+                print("calculated Voltage scan with the Metallic style")
+                with self.results:
+                     print("D: self.x, self.y",self.x,self.y)
+                     prev_points = self.results.get_all_s_scan_points( round(self.x,nd) , round(self.y,nd), round(self.V,nd) )
+                     scan_points = self.results.get_all_s_scan_points( round(self.x,nd) , round(self.y,nd) , 0.0 )
+                     print("D: scan_points, prev_points",scan_points,prev_points)
+                if scan_points is None:
+                    with self.global_results:
+                        prev_points = self.global_results.get_all_s_scan_points( round(self.x,nd) , round(self.y,nd) , round(self.V,nd) )
+                        scan_points = self.global_results.get_all_s_scan_points( round(self.x,nd) , round(self.y,nd) , 0.0)
+                        print("D: scan_points, prev_points",scan_points,prev_points)
+                    if scan_points is None:
+                        raise Exception("Tried to init bias voltage tuning at tip position that does not exist.")
+                    init_source = self.global_results
+                else:
+                    init_source = self.results
+                    print ("D: scan_points",scan_points)
+                    print ("D: prev_points",prev_points)
+                    if (prev_points != None) or prev_points != [] :
+                        calc_points = [prev_points[i][1] for i in range(len(prev_points)) ]
+                        b_pp = True
+                    else:
+                        b_pp = False
+                    print ("D: b_pp", b_pp)
+                    for ip in range(len(scan_points)):
+                        print("D: ip,scan_points[-1*ip],scan_points[-1*ip][1]",ip,scan_points[-1*ip],scan_points[-1*ip][1])
+                        if not b_pp:
+                            print("no previous points with this voltage calculated")
+                            self.atoms = init_source.extract_atoms_object(init_scan_point_id)
+                            if debug:
+                                print ("INIT-CALCULATION: init_source",init_source)
+                                print ("INIT-CALCULATION: self.atoms", self.atoms)
+                            if self.atoms is None:
+                                raise Exception("Could not obtain initial atoms object from the results database.")
+                            self.tip_atom_inds = init_source.get_model_part_atom_ids("tip")
+                            self.sample_atom_inds = init_source.get_model_part_atom_ids("sample")
+                        else:
+                           print("something already calculated - not programmed yet ") 
             else:
-                init_source = self.results
-            
-            with init_source:
-                self.atoms = init_source.extract_atoms_object(init_scan_point_id)
-                if self.atoms is None:
-                    raise Exception("Could not obtain initial atoms object from the results database.")
-                self.tip_atom_inds = init_source.get_model_part_atom_ids("tip")
-                self.sample_atom_inds = init_source.get_model_part_atom_ids("sample")
-                init_source.extract_wf_data(init_scan_point_id, wfn_file_name, self.project_path)
+                print("V non-zero")
+                print("DEBUG: x, y, s, V, s_start", self.x, self.y, self.s, self.V, self.s_start)
+                with self.results:
+                    print("D: self.x, self.y, self.s_start",self.x,self.y,self.s_start)
+                    init_scan_point_id = self.results.get_scan_point_id(self.x, self.y, self.s_start, 0.0)
+                    #scan_points = self.results.get_all_s_scan_points(self.x, self.y)
+                if init_scan_point_id is None:
+                    with self.global_results:
+                        print("D: self.x, self.y, self.s_start",self.x,self.y,self.s_start)
+                        init_scan_point_id = self.global_results.get_scan_point_id(self.x, self.y, self.s_start, 0.0)
+                        #scan_points = self.global_results.get_all_s_scan_points(self.x, self.y)
+                    if init_scan_point_id is None:
+                        raise Exception("Tried to init bias voltage tuning at tip position that does not exist.")
+                    init_source = self.global_results
+                else:
+                    init_source = self.results
+                with init_source:
+                    self.atoms = init_source.extract_atoms_object(init_scan_point_id)
+                    if self.atoms is None:
+                        raise Exception("Could not obtain initial atoms object from the results database.")
+                    # the question is what happens happens after
+                    self.tip_atom_inds = init_source.get_model_part_atom_ids("tip")
+                    self.sample_atom_inds = init_source.get_model_part_atom_ids("sample")
+                    init_source.extract_wf_data(init_scan_point_id, wfn_file_name, self.project_path)
+                    # WF and pot_path probably not needed, but we will leave it as it is. 
+                    self.pot_path = init_source.get_pot_data_path(init_scan_point_id)
+                    #if debug:
+                    #    print("Debug: init_source",init_source)
+                    print("Debug - 59X: init_scan_point_id", init_scan_point_id)
+                    #    print("Debug: self.tip_atom_inds",self.tip_atom_inds)
+                    #    print("Debug: self.sample_atom_inds",self.sample_atom_inds)
+                    print("Debug - 59X: self.pot_path", self.pot_path)
+                    #not  everything moved to prepare_metallic
+                    #exit() # just to try now. # 
         
         elif abs(self.V) < eps:
-            # now we want to use already calculated geometries and do not do any optimization #
-            # The original scripts are left here 
             with self.results:
-                if style_metallic:
-                    scan_points = self.results.get_all_s_scan_points(self.x,self.y)
-                else:
-                    can_points = self.results.get_all_s_scan_points(0.0, 0.0)
+                scan_points = self.results.get_all_s_scan_points(0.0, 0.0)
             if not scan_points:
                 with self.global_results:
-                    if style_metallic:
-                        scan_points = self.global_results.get_all_s_scan_points(self.x,self.y)
-                    else:
-                        can_points = self.global_results.get_all_s_scan_points(0.0, 0.0)
+                    scan_points = self.global_results.get_all_s_scan_points(0.0, 0.0)
                 if not scan_points:
                     raise Exception("Could not find suitable initial scan point from the results databases.")
                 init_source = self.global_results
@@ -517,7 +648,41 @@ class Descend_tip_task(Abstract_task):
             
             # Calculate average electric field in the gap of the macroscopic model from
             # the electrostatic potential
-            if global_const.use_uniform_efield and not style_metallic:
+            if style_metallic:
+                #now_scan_point_id = init_source.get_scan_point_id(self.x, self.y, self.s, 0.0)
+                #print ("D - 65X: now_scan_point_id, x, y, s:", now_scan_point_id, self.x, self.y, self.s)
+                print ("just in case, that the original point is calculated, but probably not useful.")
+                print ("D: result_db_file",self.result_db_file)
+                print ("D: project_path", self.project_path)
+                print ("D: worker_path",self.worker_path)
+                print ("D: e_field_path", self.e_field_path)
+                print ("D - 65X: init_scan_point_id", init_scan_point_id)
+                with init_source:
+                    self.pot_path = init_source.get_pot_data_path(init_scan_point_id, point=[self.x,self.y,self.s], V=self.V)
+
+                print ("D - 65X: self.pot_path", self.pot_path)
+
+                self.prepare_metallic() #- I have no fucking idea why this is not working#
+                #
+                #tmp_src=self.worker_path+global_const.cp2k_extpot_file
+                #try:
+                #    os.unlink(tmp_src)
+                #    print("removing link for old potential",tmp_src)
+                #except:
+                #    print("no previous potential in the working directory", tmp_src)
+                #tmp_src = self.e_field_path + self.pot_path
+                #tmp_dest = self.worker_path + global_const.cp2k_extpot_file
+                #if debug:
+                #    print ("D: result_db_file",self.result_db_file)
+                #    print ("D: project_path", self.project_path)
+                #    print ("D: worker_path",self.worker_path)
+                #    print ("D: e_field_path", self.e_field_path)
+                #    print ("D: e_field_path+pot_path", tmp_src)
+                #    print ("D: tmp_dest", tmp_dest)
+                #os.symlink(tmp_src, tmp_dest)
+                #print("symlink created")
+                 
+            elif global_const.use_uniform_efield :
                 self.E_per_V = calc_macro_gap_efield(self.s, self.global_results)
             # Extracts external electrostatic potential from the results database
             # interpolating with respect to values of s and writes it to file "pot.cube"
@@ -526,22 +691,37 @@ class Descend_tip_task(Abstract_task):
                     if not style_metallic:
                         axisym_pot_in_db_to_cube(global_const.cp2k_extpot_file, self.s,
                                                 self.atoms, self.global_results)
-                    else: # style_metallic: #
-                        print ("going to recall the potential from precalculated E_field procedures" )
-                        # TO BE WRITTEN -- HERE !!! #
         
         self.calc_initialized = True
-
+        print("initialized")
+        #exit()
 
     def next_step(self):
         if self.calc_initialized:
             if self.s - self.s_step >= self.s_end-eps:
-                self.descend_tip()
+                self.descend_tip() # not needed for style metallic but whatever #
                 self.s =round( self.s - self.s_step,nd)
                 if abs(self.V) > eps:
+                    if style_metallic:
+                        init_source = self.results # here we are working with results only #
+                        wfn_file_name = self.task_name + global_const.cp2k_wfn_suffix(kpts=self.kpts)
+                        with init_source:
+                            now_scan_point_id = init_source.get_scan_point_id(self.x, self.y, self.s, 0.0)
+                            print("now_scan_point_id, x, y, s:", now_scan_point_id, self.x, self.y, self.s)
+                            self.atoms = init_source.extract_atoms_object(now_scan_point_id)
+                            if self.atoms is None:
+                                raise Exception("Could not obtain initial atoms object from the results database.")
+                            # the question is what happens happens after
+                            self.tip_atom_inds = init_source.get_model_part_atom_ids("tip")
+                            self.sample_atom_inds = init_source.get_model_part_atom_ids("sample")
+                            init_source.extract_wf_data(now_scan_point_id, wfn_file_name, self.project_path)
+                            # still no idea, what the wf file is supposed to do #
+                            self.pot_path = init_source.get_pot_data_path(now_scan_point_id)
+                            print("D: self.pot_path",self.pot_path)
+                        self.prepare_metallic()
                     # Calculate average electric field in the gap of the macroscopic model from
                     # the electrostatic potential
-                    if global_const.use_uniform_efield:
+                    elif global_const.use_uniform_efield:
                         self.E_per_V = calc_macro_gap_efield(self.s, self.global_results)
                     # Extracts external electrostatic potential from the results database
                     # interpolating with respect to values of s and writes it to file "pot.cube"

@@ -46,7 +46,7 @@ lib_ext   ='_lib.so'                                             #
 runable      = False ;# use false all over here, unless debugging#
 debug        = False ;
 save_pre_opt = False ; 
-save_npy     = True  ;
+save_npy     = False ;
 # ----------------- Main parameters ---------------------------- #
 
 g_file = 'geometry_x0.0_y0.0.traj'; # from where the geometry is taken - in the future this is supposed to be from the data base
