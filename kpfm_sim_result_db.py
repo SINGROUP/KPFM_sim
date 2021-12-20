@@ -370,7 +370,7 @@ class Result_db(object):
         else:
             print("D: path not found for this")
             print("DL V, point",V, point)
-            if abs(V > eps):
+            if abs(V) > eps:
                 now_id_tmp = get_scan_point_id(point[0], point[1], point[2], 0.0)
                 print("D: now_id_tmp",now_id_tmp)
                 cur = self.db_con.cursor()
