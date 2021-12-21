@@ -369,13 +369,13 @@ class Result_db(object):
             return row["pot_path"]
         else:
             print("D: path not found for this")
-            print("DL V, point",V, point)
+            print("D: V, point",V, point)
             if abs(V) > eps:
-                now_id_tmp = get_scan_point_id(point[0], point[1], point[2], 0.0)
+                now_id_tmp = self.get_scan_point_id(point[0], point[1], point[2], 0.0)
                 print("D: now_id_tmp",now_id_tmp)
                 cur = self.db_con.cursor()
                 cur.execute("SELECT pot_path FROM pot_data_path WHERE scan_point_id=?",
-                    (scan_point_id,))
+                    (now_id_tmp,))
                 row = cur.fetchone()
                 print ("D: row",row)
                 if row is not None:
