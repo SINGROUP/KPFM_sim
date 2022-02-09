@@ -57,6 +57,8 @@ parser.add_option('-n', '--no_forces', action='store_false', default = True,
                     help="do not store the forces -- for running with V != 0 use this ")
 parser.add_option('-p', '--ef_fol', action ="store", type="string", nargs=1,
                     help="<path> towards e_field folder. If default value, is used, then pwd command is used instead")
+parser.add_option('--Vopt',       action='store_true', default = False,
+                    help="only when you want to opt with the electric field appiled (default no-opt)")
 (options,args) = parser.parse_args()
 
 if debug:
@@ -68,6 +70,7 @@ if debug:
     print("options.no_wfn",options.no_wfn)
     print("options.no_forces",options.no_forces)
     print("options.ef_fol",options.ef_fol)
+    print("options.Vopt",options.Vopt)
 
 if (options.files == None) or (options.slurm_id == None):
     sys.exit(erm)
@@ -166,7 +169,7 @@ while is_steps_left:
     #print ("DEBUG: task.atoms",task.atoms ); exit()
    
     if isinstance(task, Descend_tip_task):
-        cp2k_calc = cp2k_initializer.init_desc_tip(task.V, E_per_V=task.E_per_V)
+        cp2k_calc = cp2k_initializer.init_desc_tip(task.V, E_per_V=task.E_per_V, optWfield=options.Vopt)
     elif isinstance(task, Tune_bias_task):
         cp2k_calc = cp2k_initializer.init_tune_bias(task.V, E_per_V=task.E_per_V)
     else:
