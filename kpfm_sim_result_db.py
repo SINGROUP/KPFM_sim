@@ -462,6 +462,8 @@ class Result_db(object):
                 model_part_ids.append(model_part_id)
         if debug:
             print ("model_part_ids:",model_part_ids)
+        print ("debug: len(is_fixed)",len(is_fixed))
+        print ("debug: len(model_part_ids)",len(model_part_ids))
         for atom_i, atom in enumerate(atoms_model):
             cur.execute("INSERT INTO atoms VALUES(?,?,?,?)",
                         (atom_i, atom.symbol, is_fixed[atom_i], model_part_ids[atom_i]))
@@ -865,10 +867,12 @@ def copy_db_ft(from_db_file, to_db_file, w1_path=None, wo_path=None, wf_ext=None
                 x = scan_point[1]
                 y = scan_point[2]
                 s = scan_point[3]
-                V = scan_point[4]; V = V if V < 1000.0 else 1000.0 ; #just to adjust reruns with 1000, when the number grows with every new /s/ point #
+                V = scan_point[4]; Vtmp = V if V < 1000.0 else 1000.0 ; #just to adjust reruns with 1000, when the number grows with every new /s/ point #
                 energy = scan_point[5]
-                if to_db.get_scan_point_id(x, y, s, V) is None:
-                    to_id = to_db.write_scan_point(x, y, s, V, energy)
+                if to_db.get_scan_point_id(x, y, s, Vtmp) is None:
+                    if debug:
+                        print ("D: V, Vtmp", V , Vtmp)
+                    to_id = to_db.write_scan_point(x, y, s, Vtmp, energy)
                     print("Copying scan point {} from {} to scan point {} in {}".format(from_id,
                             from_db_file, to_id, to_db_file))
                     gm_tmp = True if (gm and from_id < 2) else False
