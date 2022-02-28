@@ -461,9 +461,9 @@ class Result_db(object):
                     model_part_id = self.write_model_part(atom_belongs_to[0], atom_belongs_to[1])
                 model_part_ids.append(model_part_id)
         if debug:
-            print ("model_part_ids:",model_part_ids)
-        print ("debug: len(is_fixed)",len(is_fixed))
-        print ("debug: len(model_part_ids)",len(model_part_ids))
+            print ("debug: model_part_ids:",model_part_ids)
+            print ("debug: len(is_fixed)",len(is_fixed))
+            print ("debug: len(model_part_ids)",len(model_part_ids))
         for atom_i, atom in enumerate(atoms_model):
             cur.execute("INSERT INTO atoms VALUES(?,?,?,?)",
                         (atom_i, atom.symbol, is_fixed[atom_i], model_part_ids[atom_i]))
@@ -946,7 +946,7 @@ def derivate_force(s, forces):
 
 
 def calc_force_curve_from_energy(result_db, x, y, V,  ignore_first = False):
-    debug = True
+    # debug = True
     energies = []
     s = []
     with result_db:
@@ -1002,7 +1002,7 @@ def calc_force_curve(result_db, x, y, V):
             atomic_forces = result_db.get_atomic_forces(scan_point_id, tip_top_atoms)
             if debug:
                 print ("debug: atomic_forces", atomic_forces)
-            print ("debug: len(atomic_forces)", scan_point_id, len(atomic_forces))
+                print ("debug: len(atomic_forces)", scan_point_id, len(atomic_forces))
             if atomic_forces is not None:
                 ss.append(s)
                 forces.append(np.sum(atomic_forces[:,1])*au_to_N)
@@ -1030,7 +1030,8 @@ def extract_charges_descent(result_db,  x, y, V):
     #traj = Trajectory(traj_file, "w")
     with result_db:
         scan_points = result_db.get_all_s_scan_points(x, y, V)
-        print("D scan_points",scan_points)
+        if debug:
+            print("D scan_points",scan_points)
         lcharges = []
         for point in scan_points:
             atoms, charges  = result_db.extract_atoms_object(point[0], get_charges = True)

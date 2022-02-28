@@ -424,12 +424,16 @@ def create_biased_cube(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.cu
     !!! beware CP2K code is super strict, only the python save_cube is working properly for writing the cube file as it seems. #
     '''
     print ("Going to create KPFM (metallic) tip-sample electrostatic field -- for given geometry and creates cube file:", final_pot_name);
-    pos = geom.positions;
+    tmp_pos=geom.get_scaled_positions()
+    tmp_pos=np.modf(tmp_pos)[0]
+    lvs = np.array(geom.get_cell()) ; print ("D: tmp_pos",tmp_pos); print ("D: lvs",lvs)
+    pos = np.array(tmp_pos).dot(lvs) # used instead, so the geometry would be folded to the original cell ## 
+    print ("D: pos",pos)
+    #pos = geom.positions;
     n_at = len(pos)
     mol_xyz = np.zeros((n_at,4))
     mol_xyz[:,:3]=pos
     mol_xyz[:,3] =geom.get_atomic_numbers()
-    lvs = geom.get_cell()
     print("copying atoms around the cell, because of PBC")
     pos2= copy_arround_borders(pos,lvs,0.1)
     g_vec = ddd.copy()
@@ -507,7 +511,6 @@ def create_biased_cube(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.cu
         print ("debug: optind", optind)
     print("optimizing the field through iterations, all in C++")
     Varr = opt_V(n_add, ndim, optind, Varr, zer, precond,inner_step=inner_step, idx=idx)
-    # !!!! still some weird behaviour on the edges .... !!!! #
     print ("fully optimized potential - going to saving;")
     if save_npy or (save != "cube"): #-> save == "npy" or save == "both" #
         np.save(final_pot_name+"npy",Varr[n_add:nx+n_add,:,n_add:nz+n_add])
@@ -527,13 +530,17 @@ def create_biased_cube2(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.c
     !!! beware CP2K code is super strict, only the python save_cube is working properly for writing the cube file as it seems. #
     '''
     print ("Going to create KPFM (metallic) tip-sample electrostatic field -- for given geometry and creates cube file:", final_pot_name);
-    pos = geom.positions;
-    elements = np.array(geom.get_atomic_numbers(),dtype=np.int32)
+    tmp_pos=geom.get_scaled_positions()
+    tmp_pos=np.modf(tmp_pos)[0]
+    lvs = np.array(geom.get_cell()) #; print ("D: tmp_pos",tmp_pos); print ("D: lvs",lvs)
+    pos = np.array(tmp_pos).dot(lvs) # used instead, so the geometry would be folded to the original cell ## 
+    #print ("D: pos",pos)
+    #pos = geom.positions;
     n_at = len(pos)
+    elements = np.array(geom.get_atomic_numbers(),dtype=np.int32)
     mol_xyz = np.zeros((n_at,4))
     mol_xyz[:,:3]=pos
     mol_xyz[:,3] =geom.get_atomic_numbers()
-    lvs = geom.get_cell()
     print("copying atoms around the cell, because of PBC")
     pos2,elements2= copy_arround_borders2(pos,elements,lvs,0.1)
     g_vec = ddd.copy()
