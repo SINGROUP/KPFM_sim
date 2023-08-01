@@ -10,18 +10,29 @@ A set of Python modules for running DFT level KPFM simulations using CP2k and st
 3. Storing the essential results (total energy, atomic geometry...) in a structured form to a relational database and extracting those results easily within Python scripts.
 These tools expect you to set up your atomic configuration using Atomic Simulation Environment (ASE). If you do not like ASE, you can use whatever modeling tools you like and read the atomic configuration with ASE to an Atoms object and use it.
 
+The original plan of this project was to simulate KPFM above a non-conducting surface, and this part of code should in princicple working if a former version of the code: `https://github.com/SINGROUP/KPFM_sim/tree/138df5e02210501efdd09237fb0e2642816c6ccb <https://github.com/SINGROUP/KPFM_sim/tree/138df5e02210501efdd09237fb0e2642816c6ccb>`_, which was at least translated to python3.
+
+In the latest development it was used for calculations of KPFM of metallic sample with molecule on it and metallic tip with a flexible-tip apex, like -CO molecule.
+The latest version was producing results of forces under sample-bias, however these were not in agreement with other theories.
+The calculations as such were also rather noisy!
+
 Requirements
 ------------
 
-- Python 3.x  (originally Python 2.7)
-- Cython (`http://cython.org/ <http://cython.org/>`_)
+- Python 3.x 
 - NumPy
 - SciPy
 - Atomic Simulation Environment (ASE), `https://wiki.fysik.dtu.dk/ase/ <https://wiki.fysik.dtu.dk/ase/>`_
 - `CP2k_mtools <https://github.com/SINGROUP/CP2k_mtools>`_ (python base)
+
+In the latest version the electric field is calculated through C++ procedures stored in `E_field <https://github.com/SINGROUP/KPFM_sim/tree/master/E_field>`_; for their compilation:
+- g++
+
+Not directly used in the latest version, but still important due to dependencies:
+- Cython (`http://cython.org/ <http://cython.org/>`_)
 - `DFT_gridIO <https://github.com/SINGROUP/DFT_gridIO>`_ (python base)
 
-For calculating electrostatic potential:
+In the latest vestion totally ommited: For calculating electrostatic potential: 
 `KPFM_FEM_tools <https://github.com/SINGROUP/KPFM_FEM>`_ (python base)
 
 

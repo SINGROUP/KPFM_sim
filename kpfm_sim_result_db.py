@@ -647,8 +647,9 @@ class Result_db(object):
         atoms_model.set_cell([row["a"], row["b"], row["c"]])
         atoms_model.set_pbc([row["periodic_in_x"], row["periodic_in_y"],
                                 row["periodic_in_z"]])
-        print ("D atoms_model",atoms_model)
-        print ("D fixed_atoms_inds",fixed_atom_inds)
+        if debug:
+            print ("D atoms_model",atoms_model)
+            print ("D fixed_atoms_inds",fixed_atom_inds)
         fix_bulk = FixAtoms(fixed_atom_inds)
         atoms_model.set_constraint(fix_bulk)
         
@@ -1020,6 +1021,20 @@ def extract_geometry_traj(result_db, traj_file, x, y, V):
             traj.write(atoms)
     del latoms;
     traj.close()
+
+def extract_charges_descent(result_db,  x, y, V):
+    #traj = Trajectory(traj_file, "w")
+    with result_db:
+        scan_points = result_db.get_all_s_scan_points(x, y, V)
+        print("D scan_points",scan_points)
+        lcharges = []
+        for point in scan_points:
+            atoms, charges  = result_db.extract_atoms_object(point[0], get_charges = True)
+            lcharges.append(charges)
+        lcharges = np.array(lcharges[::-1])
+        if debug:
+            print ("D full charges.shape",lcharges.shape)
+    return lcharges;
 
 # The END ??? #
 
