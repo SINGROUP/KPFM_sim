@@ -1,0 +1,60 @@
+#!/bin/bash
+#SBATCH --account=project_2003835
+#SBATCH -p medium           # test - for testing 1h ; medium - up to 20 nodes/36 hours ; large - 20-200 nodes/36 hours #
+#SBATCH --time=12:00:00     # dd-hh:mm:ss
+#SBATCH -J BBB_AAA_CCC          # name 
+#SBATCH -o sbatch-%j.out    # where the outputs & errors are written
+#SBATCH -N 1                # N nodes to run (N x 64 = n); max 192 ; max debug 48
+#SBATCH -n 128              # n processes to run (N x 64 = n); max 192 ; max debug 48
+
+# check modules.txt for updating following lines: # module purge
+module load gcc/9.3.0  openmpi/4.0.3 cp2k/7.1-omp 
+export OMP_NUM_THREADS=1
+ulimit -s unlimited
+export ppath=/scratch/project_2003835/programs_KPFM
+export PYTHONPATH=$PYTHONPATH:$ppath/CP2k_mtools3:$ppath/DFT_gridIO3:$ppath/KPFM_FEM3:$ppath/KPFM_sim3:$ppath/pycp2k
+export PYTHONPATH=$PYTHONPATH:/users/krejcion/.local/lib/python3.8/site-packages/
+KPFM_GLOBAL_SCRIPTS=$ppath/KPFM_sim3/scripts
+ORIG_DIR=`pwd`
+
+worker_name=worker_BBB_AAA_CCC
+glob_file=glob_res/afm.db
+result_file=kpfm_res_BBB_AAA_CCC.db
+task_db_file=kpfm_workers_BBB_AAA_CCC.db
+
+if [ ! -d $worker_name ]; then
+    mkdir $worker_name
+fi
+cd $worker_name
+p_file=cp2k_common_params.py
+if [ ! -f $p_file ]; then
+    ln -s ../$p_file ./$p_file
+fi
+p_file=cp2k_system_params.py
+if [ ! -f $p_file ]; then
+    ln -s ../$p_file ./$p_file
+fi
+
+project_path=./
+slurm_id=$SLURM_JOB_ID
+
+# ******************** safety check *************************
+echo " *** safety check ***"
+echo "PYTHONPATH:" $PYTHONPATH
+echo "KPFM_GLOBAL_SCRIPTS:" $KPFM_GLOBAL_SCRIPTS
+echo "ORIG_DIR:" $ORIG_DIR
+echo "glob_file:" $glob_file
+echo "worker_name:" $worker_name
+echo "task_db_file" $task_db_file
+echo "slurm_id (2x)" $slurm_id $SLURM_JOB_ID
+echo "result_file" $result_file
+echo " *** safety check ended ***"
+# ***************** safety check ended **********************
+
+
+
+python3 ../pdtt_BBB.AAA.CCC.py -f $task_db_file ../$result_file ../$glob_file
+
+python3 ../run_task_w_forces.py -k -w -n -f $task_db_file $project_path -s $slurm_id -p ../ # -k .. kpts ; -w .. no wfn ; -n ... no forces
+
+echo "Done, done"
