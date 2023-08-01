@@ -170,6 +170,72 @@ extern "C" {
         
     }
     
+
+    void fix_all_sizes(int * fixtop, int * fixbot, int *fixnum, double * xyzgrid, int * dims, int * nat, double * pos, int * top_at, int * top_fix_at, int * bot_at, int *  bot_fix_at, double * sizesb, double * sizest){
+        // out: fixtop 1D integer array (full of zeros), for storring those indexes (of the 3D V array, which will be fixed.
+        // out: fixbot 1D integer array (full of zeros), for storring those indexes (of the 3D V array, which will be fixed.
+        // out: fixnum 1D integer of -- 1 length of fixtop, 1 length of fixbot, then for each x and y min /j/ (bottom) and max /j/ (top)for the voltage ramp preparations
+        double max = 1E6; double min = -1E6;
+        int nta  = nat[0];
+        int nba  = nat[1];
+        int ntfa = nat[2];
+        int nbfa = nat[3];
+        for(int i=0; i<ntfa; i++){ // figuring out the lowest fixed atom (beware z is y )
+            //printf("debug: z_pos - tip fixed %4.5f %d \n", pos[top_fix_at[i]*3+1],  top_fix_at[i] );
+            if (pos[top_fix_at[i]*3+1] < max ){max = pos[top_fix_at[i]*3+1];}
+        }
+        for(int i=0; i<nbfa; i++){ // figuring out the highest fixed atom (beware z is y )
+            //printf("debug: z_pos - bot fixed %4.5f %d \n", pos[bot_fix_at[i]*3+1] , bot_fix_at[i]  );
+            if (pos[bot_fix_at[i]*3+1] > min ){min = pos[bot_fix_at[i]*3+1];}
+        }
+        printf("\n");
+        printf("max (top): %20.20lf \n",max);
+        printf("min (bot): %20.20lf \n \n",min);
+        printf("-- pretty long fixing loop -- \n");
+        int nx=dims[0];
+        int ny=dims[1];
+        int nz=dims[2];        
+        int xs = dims[1]*dims[2]*3 ; // size of each x dimension of the 4D xyzgrid
+        int ys = dims[2]*3 ;
+        int zs = 3 ;
+        int xf = dims[1]*dims[2] ; // size of each x dimention of the 3D grid
+        int yf = dims[2] ; 
+        int ifixt = 0; int ifixb = 0;
+        int ifixn = 2; // bacause ifixt and ifixn are stored in the first 2 numbers of the array
+        //int yfixt = 10000; int yfixb =-1;
+        int tmpl = 0 ; int tmps = 0; //tmp indexes in the 4D (l) and 3D (s) grid
+        for  (int i=0; i<nx; i++){
+            for (int j=0; j<ny; j++){   
+                for (int k=0; k<nz; k++){
+                    tmpl=i*xs+j*ys+k*zs;
+                    tmps=i*xf+j*yf+k;
+                    ifixn=i*nz*2+k*2+2; //tmpi = (ifixn > tmpi) ? ifixn:tmpi;
+                    if (xyzgrid[tmpl+1] < min){ // lowest z (y in this way) of the fixed atom
+                        fixbot[ifixb] = tmps ; ifixb += 1 ; fixnum[ifixn] = (j > fixnum[ifixn]) ? j:fixnum[ifixn] ; //yfixb = (j > yfixb) ? j: yfixb ;
+                        //printf("debug: fixb; %d %d %d %d %4.5f %4.5f %d %d %d %d \n", i,j,k,tmpl+1,xyzgrid[tmpl+1],min,fixnum[ifixn],ifixn,fixbot[ifixb],ifixb);
+                    }else{if (xyzgrid[tmpl+1] > max){ // lowest z (y in this way) of the fixed atom
+                        fixtop[ifixt] = tmps ; ifixt += 1 ; fixnum[ifixn+1] = (j < fixnum[ifixn+1]) ? j:fixnum[ifixn+1] ; // yfixt = (j < yfixt) ? j: yfixt ;
+                        //printf("debug: fixt; %d %d %d %d %4.5f %4.5f %d %d %d %d \n", i,j,k,tmpl+1,xyzgrid[tmpl+1],min,fixnum[ifixn],ifixn,fixtop[ifixt],ifixt);
+                    }else{for (int ia=0; ia<nba ; ia++){ // atoms of the bottom
+                        if ( ( sqr(xyzgrid[tmpl]-pos[bot_at[ia]*3+0]) + sqr(xyzgrid[tmpl+1]-pos[bot_at[ia]*3+1]) + sqr(xyzgrid[tmpl+2]-pos[bot_at[ia]*3+2]) ) < sizesb[ia]  ){
+                        //        (       x      -  ix[ia]        )**2 +    (        y     -    iy[ia]      )**2 +  (        z        -    iz[ia]      )**2     < 1**2 // No SQRT needed ..//
+                            fixbot[ifixb] = tmps ; ifixb += 1 ; fixnum[ifixn] = (j > fixnum[ifixn]) ? j:fixnum[ifixn] ; break; // break - not to have the same index twice
+                        };
+                    };    for (int ia=0; ia<nta ; ia++){ // atoms of the tip
+                        if ( ( sqr(xyzgrid[tmpl]-pos[top_at[ia]*3+0]) + sqr(xyzgrid[tmpl+1]-pos[top_at[ia]*3+1]) + sqr(xyzgrid[tmpl+2]-pos[top_at[ia]*3+2]) ) < sizest[ia]  ){
+                        //        (       x     -  ix[ia]        )**2 +    (        y      -    iy[ia]      )**2 +  (        z        -    iz[ia]      )**2     < 1**2 // No SQRT needed ..//
+                            fixtop[ifixt] = tmps ; ifixt += 1 ; fixnum[ifixn+1] = (j < fixnum[ifixn+1]) ? j:fixnum[ifixn+1] ; break;
+                        }
+                    }}}
+                }
+            }
+        }
+        fixnum[0]=ifixt; fixnum[1]=ifixb; //fixnum[2]=yfixt; fixnum[3]=yfixb;
+        printf("ifixn %d \n",ifixn);
+    }
+
+
+
     void fix_all(int * fixtop, int * fixbot, int *fixnum, double * xyzgrid, int * dims, int * nat, double * pos, int * top_at, int * top_fix_at, int * bot_at, int *  bot_fix_at){
         // out: fixtop 1D integer array (full of zeros), for storring those indexes (of the 3D V array, which will be fixed.
         // out: fixbot 1D integer array (full of zeros), for storring those indexes (of the 3D V array, which will be fixed.

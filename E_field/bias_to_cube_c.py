@@ -46,7 +46,7 @@ lib_ext   ='_lib.so'                                             #
 runable      = False ;# use false all over here, unless debugging#
 debug        = False ;
 save_pre_opt = False ; 
-save_npy     = False ;
+save_npy     = False ;#automatically save results (also) as npy  #
 # ----------------- Main parameters ---------------------------- #
 
 g_file = 'geometry_x0.0_y0.0.traj'; # from where the geometry is taken - in the future this is supposed to be from the data base
@@ -89,6 +89,9 @@ n_add = 1; #5 # 20; # ammount of additional indices around the original cell #
 #************* technical parameters ***************************#
 precond = 0 ; # 1- true ; seems to be faster without it        #
 inner_step = 1000; # amount of inner steps                     #
+#el_size -- starts with 1=1.25*0.8, since elements starts from 1 ...
+el_size = np.array([1.25,1.487, 1.4815, 2.0, 2.0, 2.08, 1.908, 1.78, 1.6612, 1.75, 1.5435, 2.77, 2.42, 2.4, 1.9, 2.1, 2.0, 1.948, 1.8805, 3.02, 2.78, 2.62, 2.44, 2.27, 2.23, 2.25, 2.27, 2.25, 2.23, 2.23, 2.24, 2.41, 2.32, 2.25, 2.18, 2.22, 2.0, 3.15, 2.94, 2.71, 2.57, 2.46, 2.39, 2.37, 2.35, 2.32, 2.35, 2.37, 2.37, 2.53, 2.46, 2.41, 2.36, 2.35, 2.1815, 3.3, 3.05, 2.81, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.52, 2.42, 2.36, 2.35, 2.33, 2.34, 2.37, 2.41, 2.25, 2.53, 2.53, 3.52, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.75, 2.0, 2.65, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0])
+el_size *= 0.8 # - minus 20% of the vdW size                   #
 #*****************    END     *********************************#
 
 cpp_name='ElField' # uncomment the following two if you want to always compile the C++ functions #
@@ -114,6 +117,58 @@ def create_xyz_Grid(xyzgrid,g_vec,g_0):
     # xyzgrid - zeros in & xyz out ; g_vec - small voxel vectors ; g_0 - origin of the cube file #
     dims = np.array(xyzgrid.shape[0:3],dtype=np.int32)
     lib.create_xyzGrid(xyzgrid,dims,g_vec,g_0)
+
+# void fix_all_sizes(int * fixtop, int * fixbot, int *fixnum, double * xyzgrid, int * dims, int * nat, double * pos, int * top_at, int * top_fix_at, int * bot_at, int *  bot_fix_at, double * sizesb, double * sizest)
+lib.fix_all_sizes.argtypes = [array1i, array1i, array1i, array4d, array1i, array1i, array2d, array1i, array1i, array1i, array1i, array1d, array1d]
+lib.fix_all_sizes.restype = None
+def fix_all_sizes(xyzgrid,pos,top_atoms,fixed_top_atoms,bot_atoms,fixed_bot_atoms,elements):
+    # this function will create anything necessary for the preparation of the V calculations - it will create 3 arrays of indices: #
+    # fixtop - indices which belongs to the tip (+0.5 Vtip) #
+    # fixbot - indices which belongs to the sample (-0.5 Vtip) #
+    # fixnum - indices for each /y/ (z) line for the better pre - opt which is done for the lines#
+    # inputs are: xyzgrid - 4d grid of the positions of voxels; pos - n_at * 3 matrix of xyz positions of atoms; #
+    # -||- : top_atoms - indices of atoms of the tip; fixed_top_atoms - indices of fixed atoms of the tip #
+    # -||- : bot_atoms - indices of atoms of the sample; fixed_bot_atoms - indices of fixed atoms of the sample #
+    # -||- : elements - integers with atomic numbers #
+    dims = np.array(xyzgrid.shape[0:3],dtype=np.int32)
+    fixtop = np.zeros((dims[0]*dims[1]*dims[2]),dtype=np.int32)
+    fixbot = np.zeros((dims[0]*dims[1]*dims[2]),dtype=np.int32)
+    fixnum = np.zeros((2+dims[0]*dims[2]*2),dtype=np.int32) # first 2 are lengths of fixtop and fixbot, others are z(y in reality) points for each x and y max(bot) and min(top) for the V ramp -- preconditioner #
+    fixnum[3::2]=100000; # some insanely hight number for the initial comparison
+    if debug:
+         print("debug: fixtop.shape",fixtop.shape)
+         print("debug: fixnum (in)",fixnum)
+    nta  = len(top_atoms)
+    ntfa = len(fixed_top_atoms)
+    nba  = len(bot_atoms)
+    nbfa = len(fixed_bot_atoms)
+    sizeb = np.zeros(nba)
+    sizet = np.zeros(nta)
+    for ia in range(nba):
+        sizeb[ia] = el_size[elements[bot_atoms[ia]]]**2 ;# x**2 + y**2 + z**2 < r**2
+    for ia in range(nta):
+        sizet[ia] = el_size[elements[top_atoms[ia]]]**2 ; 
+    print("D sizet",sizet)
+    print("D sizeb",sizeb)
+    atnum = np.array((nta,nba,ntfa,nbfa),dtype=np.int32)
+    top_atoms=np.array(top_atoms,dtype=np.int32)
+    fixed_top_atoms=np.array(fixed_top_atoms,dtype=np.int32)
+    bot_atoms=np.array(bot_atoms,dtype=np.int32)
+    fixed_bot_atoms=np.array(fixed_bot_atoms,dtype=np.int32)
+    lib.fix_all_sizes(fixtop,fixbot,fixnum,xyzgrid,dims,atnum,pos,top_atoms,fixed_top_atoms,bot_atoms,fixed_bot_atoms,sizeb,sizet)
+    ifixt=fixnum[0];ifixb=fixnum[1];
+    if debug:
+        print("debug: ifixt, ifixb, yfixt, yfixb",fixnum)
+        #print("debug: fixtop[ifixt-2..ifixt++]", fixtop[ifixt-2],fixtop[ifixt-1],fixtop[ifixt],fixtop[ifixt+1],fixtop[ifixt+2])
+        #print("debug: fixbot[ifixt-2..ifixt++]", fixbot[ifixb-2],fixbot[ifixb-1],fixbot[ifixb],fixbot[ifixb+1],fixbot[ifixb+2])
+        #np.savetxt("fix_top_indices.txt" ,fixindices, fmt='%i')
+    fixtop = np.delete(fixtop,np.arange(ifixt,dims[0]*dims[1]*dims[2],dtype=np.int32)) # removing the not - necessary (null) parts of the array #
+    fixbot = np.delete(fixbot,np.arange(ifixb,dims[0]*dims[1]*dims[2],dtype=np.int32)) # removing the not - necessary (null) parts of the array #
+    if debug:
+        print("debug: len(fixtop), len(fixbot)", len(fixtop), len(fixbot))
+        print("debug: fixtop[-2..0]", fixtop[-2],fixtop[-1],fixtop[0])
+        print("debug: fixbot[-2..0]", fixbot[-2],fixbot[-1],fixbot[0])
+    return fixtop, fixbot, fixnum;
 
 #    void fix_all(int * fixtop, int * fixbot, int *fixnum, double * xyzgrid, int * dims, int * nat, double * pos, int * top_at, int * top_fix_at, int * bot_at, int *  bot_fix_at)
 lib.fix_all.argtypes = [array1i, array1i, array1i, array4d, array1i, array1i, array2d, array1i, array1i, array1i, array1i]
@@ -157,6 +212,7 @@ def fix_all(xyzgrid,pos,top_atoms,fixed_top_atoms,bot_atoms,fixed_bot_atoms):
         print("debug: fixtop[-2..0]", fixtop[-2],fixtop[-1],fixtop[0])
         print("debug: fixbot[-2..0]", fixbot[-2],fixbot[-1],fixbot[0])
     return fixtop, fixbot, fixnum;
+
 
 #    void prepare_V( int n_add,  int * dims_small, int * fixtop, int * fixbot, int *fixnum, int * optind,  double * V,  double V_tip){
 lib.prepare_V.argtypes = [ c_int ,     array1i,      array1i,      array1i,       array1i,      array1i,     array3d ,     c_double ]
@@ -321,23 +377,63 @@ def copy_arround_borders(pos,lvs,sd): # sd - safe distance
         print("debug: len(pos2)",len(pos2))
     return pos2;
 
+def copy_arround_borders2(pos,elements,lvs,sd): # sd - safe distance
+    # copy the atoms left, right, front and back at the borders, within the safe distance so the PBC are OK, for the fixing of voxels, pre-conditioner and everything #
+    normlvs = np.array((lvs[0]/lvs[0, 0], [0,100.,0], lvs[2]/lvs[2, 2]),dtype=np.double)
+    if debug:
+        print("debug: normlvs",normlvs)
+    #print("debug:", normlvs[0])
+    pos2=[]; elements2=[]
+    for i in range(len(pos)):
+        if np.linalg.norm(pos[i,0:3:2])<sd: # original point
+            #print("debug: norm, pos", np.linalg.norm(pos[i,0:3:2]) ,pos[i,0:3:2])
+            pos2.append(pos[i]+lvs[0]+lvs[2]); elements2.append(elements[i])
+        if np.linalg.norm(pos[i,0:3:2]-lvs[0,0:3:2]-lvs[2,0:3:2])<sd: # the ending point of the cell
+            #print("debug: norm, pos", np.linalg.norm(pos[i,0:3:2]-lvs[0,0:3:2]-lvs[2,0:3:2]),pos[i,0:3:2],-lvs[0,0:3:2]-lvs[2,0:3:2])
+            pos2.append(pos[i]-lvs[0]-lvs[2]); elements2.append(elements[i])
+        if np.linalg.norm(pos[i,0:3:2]-pos[i,0]*normlvs[0,0:3:2])<sd: # the front side of the cell
+            #print("debug: norm, pos", np.linalg.norm(pos[i,0:3:2]-pos[i,0]*normlvs[0,0:3:2]),pos[i,0:3:2],-pos[i,0]*normlvs[0,0:3:2])
+            pos2.append(pos[i]+lvs[2]); elements2.append(elements[i])
+        if np.linalg.norm(pos[i,0:3:2]-pos[i,2]*normlvs[2,0:3:2])<sd: # the left side of the cell
+            pos2.append(pos[i]+lvs[0]); elements2.append(elements[i])
+        if np.linalg.norm(pos[i,0:3:2]-lvs[2,0:3:2]-(pos[i,0]-lvs[2,0])*normlvs[0,0:3:2])<sd: # the back side of the cell
+            pos2.append(pos[i]-lvs[2]); elements2.append(elements[i])
+        if np.linalg.norm(pos[i,0:3:2]-lvs[0,0:3:2]-(pos[i,2]-lvs[0,2])*normlvs[2,0:3:2])<sd: # the back side of the cell
+            pos2.append(pos[i]-lvs[0]); elements2.append(elements[i])
+    if debug:
+        print("debug: pos",pos)
+        print("debug: pos2",pos2)
+    pos2=pos if pos2 == [] else np.concatenate((pos,np.array(pos2,dtype=np.double),pos))
+    elements2 =elements if elements2 == [] else np.concatenate((elements,np.array(elements2,dtype=np.int32),elements))
+    if debug:
+        print("debug: len(pos)",len(pos))
+        print("debug: len(pos2)",len(pos2))
+    return pos2, elements2;
+
+
+
 
 # ----  definition of functions here: -------
-def create_biased_cube(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.cube', cube_head=None, cc=cc, idx=0):
+def create_biased_cube(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.cube', cube_head=None, cc=cc, idx=0, save="cube"):
     '''
     the main function, that for given geometry in an ASE objec that is given in **geom** and prepare the electrostatic potential for the Tip-Sample system with tip voltage **Vtip** #
     the final cube file is written into the **final_pot_name** file (this way multiple functions can be runned in the same time); cube_head is important for the exact match with the cp2k code #
     **cc** is centre of the geometry - plane which decided what is __tip__ (above) and what is __sample__ (below);
-    **idx*** -- rank of CPU, when MPI is used, otherwise 0 -> for finding out, from which core the output came from ;
+    **idx**  -- rank of CPU, when MPI is used, otherwise 0 -> for finding out, from which core the output came from ;
+    **save** -- "npy" or "npy" or "both" ; how to store the results;
     !!! beware CP2K code is super strict, only the python save_cube is working properly for writing the cube file as it seems. #
     '''
     print ("Going to create KPFM (metallic) tip-sample electrostatic field -- for given geometry and creates cube file:", final_pot_name);
-    pos = geom.positions
+    tmp_pos=geom.get_scaled_positions()
+    tmp_pos=np.modf(tmp_pos)[0]
+    lvs = np.array(geom.get_cell()) ; print ("D: tmp_pos",tmp_pos); print ("D: lvs",lvs)
+    pos = np.array(tmp_pos).dot(lvs) # used instead, so the geometry would be folded to the original cell ## 
+    print ("D: pos",pos)
+    #pos = geom.positions;
     n_at = len(pos)
     mol_xyz = np.zeros((n_at,4))
     mol_xyz[:,:3]=pos
     mol_xyz[:,3] =geom.get_atomic_numbers()
-    lvs = geom.get_cell()
     print("copying atoms around the cell, because of PBC")
     pos2= copy_arround_borders(pos,lvs,0.1)
     g_vec = ddd.copy()
@@ -415,14 +511,124 @@ def create_biased_cube(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.cu
         print ("debug: optind", optind)
     print("optimizing the field through iterations, all in C++")
     Varr = opt_V(n_add, ndim, optind, Varr, zer, precond,inner_step=inner_step, idx=idx)
-    # !!!! still some weird behaviour on the edges .... !!!! #
     print ("fully optimized potential - going to saving;")
-    if save_npy:
+    if save_npy or (save != "cube"): #-> save == "npy" or save == "both" #
         np.save(final_pot_name+"npy",Varr[n_add:nx+n_add,:,n_add:nz+n_add])
-    save_cube(Varr[n_add:nx+n_add,:,n_add:nz+n_add],mol_xyz,g_or,g_vec,file_path=final_pot_name, cube_head=cube_head) # y is no longer larger - not needed
+    if (save != "npy") : #-> save == "cube" or save == "both" #
+        save_cube(Varr[n_add:nx+n_add,:,n_add:nz+n_add],mol_xyz,g_or,g_vec,file_path=final_pot_name, cube_head=cube_head) # y is no longer larger - not needed
     #GU.save_scal_field( 'V_out', Varr[n_add:nx+n_add,n_add:ny+n_add,n_add:nz+n_add], lvec, data_format="xsf" ,cube_head=cube_head)
     print ("Everything saved for given geometry and cube file:", final_pot_name);
     return ;
+
+def create_biased_cube2(geom,V_tip, final_pot_name='final_pot_opt_'+str(zer)+'.cube', cube_head=None, cc=cc, idx=0, save="cube"):
+    '''
+    the main function, that for given geometry in an ASE objec that is given in **geom** and prepare the electrostatic potential for the Tip-Sample system with tip voltage **Vtip** #
+    the final cube file is written into the **final_pot_name** file (this way multiple functions can be runned in the same time); cube_head is important for the exact match with the cp2k code #
+    **cc** is centre of the geometry - plane which decided what is __tip__ (above) and what is __sample__ (below);
+    **idx**  -- rank of CPU, when MPI is used, otherwise 0 -> for finding out, from which core the output came from ;
+    **save** -- "cube" or "npy" or "both" ; how to store the results;
+    !!! beware CP2K code is super strict, only the python save_cube is working properly for writing the cube file as it seems. #
+    '''
+    print ("Going to create KPFM (metallic) tip-sample electrostatic field -- for given geometry and creates cube file:", final_pot_name);
+    tmp_pos=geom.get_scaled_positions()
+    tmp_pos=np.modf(tmp_pos)[0]
+    lvs = np.array(geom.get_cell()) #; print ("D: tmp_pos",tmp_pos); print ("D: lvs",lvs)
+    pos = np.array(tmp_pos).dot(lvs) # used instead, so the geometry would be folded to the original cell ## 
+    #print ("D: pos",pos)
+    #pos = geom.positions;
+    n_at = len(pos)
+    elements = np.array(geom.get_atomic_numbers(),dtype=np.int32)
+    mol_xyz = np.zeros((n_at,4))
+    mol_xyz[:,:3]=pos
+    mol_xyz[:,3] =geom.get_atomic_numbers()
+    print("copying atoms around the cell, because of PBC")
+    pos2,elements2= copy_arround_borders2(pos,elements,lvs,0.1)
+    g_vec = ddd.copy()
+
+    nx = inx; dx = lvs[0,:]/nx ;
+    ny = iny; dy = lvs[1,:]/ny ;
+    nz = inz; dz = lvs[2,:]/nz ;
+    ndim=np.array([nx,ny,nz]) # now everything moved to x->y->z
+    g_or = np.array([0.,0.,0.])
+    for i in range(3):
+        #g_vec[i] /= ndim[i] ; # already defined in the beginning; #
+        print ("g_vec",i,":",g_vec[i])
+    
+    if debug:
+        print ("debug: nx, ny, nz", nx, ny, nz)
+        print ("debug: dx",dx)
+        print ("debug: dy",dy)
+        print ("debug: dz",dz)
+    
+    xyzarr = np.zeros((nx,ny,nz,3)); # now everything x->y->z # cube way
+    print("creating xyz array in C++")
+    create_xyz_Grid(xyzarr,g_vec,g_or)
+    print("back in Python")
+    if debug:
+        print("xyzarr - only on z axis:")
+        print(xyzarr[0,0,:,2])
+        print("xyzarr - only on y axis:")
+        print(xyzarr[0,:,0,1])
+        print("xyzarr - only on x axis:")
+        print(xyzarr[:,0,0,0])
+    print("getting indices and separating tip and sample ; ")
+    fi = geom.constraints[0].get_indices()
+    if debug:
+        print ("debug: fi",fi)
+        #print ("debug: lvec",lvec)
+        print ("debug: pos2[:,1]",pos2[:,1])
+    ti, bi, fit, fib = separate_top_bottom(pos2[:,1],cc,fi)
+    if debug:
+        print ("debug: ti",ti)
+        print ("debug: fit",fit)
+        print ("debug: bi",bi)
+        print ("debug: fib",fib)
+    # ti - tip index ; bi - bottom (sample) index ; zmt - z min tip ; zmb - z max tip ;; Last 2 - from where the voltage is automatically fixed;
+    print("fixing the indices in C++")
+    fixtop, fixbot, fixnum=fix_all_sizes(xyzarr,pos2,ti,fit,bi,fib,elements2)
+    if debug:
+        print ("debug: fixtop",fixtop)
+        print ("debug: fixbot",fixbot)
+        tmp = fixtop - np.roll(fixtop,1) # just to check, if all the numbers in fixtop are raising higher #
+        mask = tmp == 0
+        print ("debug: mask",mask)
+        print ("debug: fixtop[mask], fixtop[0]",fixtop[mask],fixtop[0])
+        print ("debug: len(fixtop[mask])",len(fixtop[mask]))
+        tmp = fixbot - np.roll(fixbot,1) # just to check, if all the numbers in fixbot are raising higher #
+        mask = tmp == 0
+        print ("debug: mask",mask)
+        print ("debug: len(fixbot[mask])",len(fixbot[mask]))
+        print("debug: pre - prepare_V (fixtop,fixbot,fixnum,V_tip,n_add,ndim)", fixtop, fixbot, fixnum, V_tip, n_add, ndim)
+    # --- now going to C++ procedures ---- #
+    print("preparing the field in C++")
+    Varr, optind = prepare_V(fixtop,fixbot,fixnum,V_tip,n_add,ndim);
+    if debug:
+        Vtmp2 = Varr.copy()
+    if save_pre_opt:
+        print("saving pre-optimized potential small")
+        save_cube(Varr[n_add:nx+n_add,:,n_add:nz+n_add],mol_xyz,g_or,g_vec,file_path='pot_test.cube', cube_head=cube_head) # y is no longer larger - not needed
+    g_or2 = g_or - np.array([g_vec[0,0]*n_add+g_vec[2,0]*n_add,0.,g_vec[0,2]*n_add+g_vec[2,2]*n_add])
+    if debug:
+        print ("debug: g_or2", g_or2)
+    if save_pre_opt:
+        print("saving pre-optimized potential full")
+        save_cube_c(Varr[:,:,:],mol_xyz,g_or2,g_vec,file_path='pot_full_test.cube');
+    if debug:
+        print ("debug: Vtmp2-Varr", Vtmp2-Varr)
+        print ("debug: optind", optind)
+    print("optimizing the field through iterations, all in C++")
+    Varr = opt_V(n_add, ndim, optind, Varr, zer, precond,inner_step=inner_step, idx=idx)
+    # !!!! still some weird behaviour on the edges .... !!!! #
+    print ("fully optimized potential - going to saving;")
+    if save_npy or (save != "cube"): #-> save == "npy" or save == "both" #
+        np.save(final_pot_name+"npy",Varr[n_add:nx+n_add,:,n_add:nz+n_add])
+    if (save != "npy") : #-> save == "cube" or save == "both" #
+        save_cube(Varr[n_add:nx+n_add,:,n_add:nz+n_add],mol_xyz,g_or,g_vec,file_path=final_pot_name, cube_head=cube_head) # y is no longer larger - not needed
+    #GU.save_scal_field( 'V_out', Varr[n_add:nx+n_add,n_add:ny+n_add,n_add:nz+n_add], lvec, data_format="xsf" ,cube_head=cube_head)
+    print ("Everything saved for given geometry and cube file:", final_pot_name);
+    return ;
+
+
 
 # --------- main run -------------------------
 

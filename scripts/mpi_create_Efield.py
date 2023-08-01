@@ -9,7 +9,7 @@ from ase import atoms
 import math
 from optparse import OptionParser
 
-from E_field.bias_to_cube_c import create_biased_cube
+from E_field.bias_to_cube_c import create_biased_cube, create_biased_cube2
 from kpfm_sim_result_db import Result_db, prepare_db_for_small
 
 
@@ -20,6 +20,8 @@ from kpfm_sim_result_db import Result_db, prepare_db_for_small
 # and creates an (aproximate) potential between the metallic tip #
 # and sample in the KPFM measurements. It can create multiple    #
 # potentials at the same if runned through MPI                   #
+# UPDATE since Feb 18th, 2022 it uses procedure which size the   #
+# atoms to 80% of the vdW sphere according to OPLS force-field.  # 
 #                                                                #
 #                    USAGE:                                      #
 #                                                                #
@@ -35,6 +37,9 @@ from kpfm_sim_result_db import Result_db, prepare_db_for_small
 # srun python3 mpi_create_Efield --mpi # for mpi4py parellized   #
 # (use 'mpiexec -n XX' or 'mpirun -n XX' if your super-computer  #
 #  do not know srun )                                            #
+# You can also use a parser options -f "cube" xor -f "npy" xor   #
+# -f "both", which tells you how you store the final results.    #
+# for some runs we experienced problems while writing cube files #
 #                                                                #
 # Optionally:                                                    #
 # Those here in-built functions can be part of outer scripts     #
@@ -54,6 +59,8 @@ write2db         = True;
 glob_db_file   = "glob_res/afm.db"
 db_file        = "e_fields.db"
 e_field_folder = "E_field"
+
+atom_style = "OPLS" # "stiff" or "OPLS" - if "stiff", then the electrostatic field is fixed for 1Angstrom around each atom; if "OPLS", then it is fixed for 80% of the vdW sphere defined by the OPLS force-field #
 
 cc = 11.0 # !!! IMPORTANT !!! the maximum "height" of the bottom (sample) atoms ; because of xzy - height refers to y in xyz file !!! IMPORTANT !!! #
 
@@ -83,8 +90,12 @@ V_tip = 1.00 # leave to 1.00 ; at the moment this is tip-Voltage #
 parser = OptionParser()
 parser.add_option('--mpi', action='store_true', default = False, 
                     help="allows to run MPI")
+parser.add_option('-f',"--data_format" , action="store" , type="string",
+                      help="Specify the output format of the vector and scalar "
+                      "field. Supported formats are: cube,npy or both", default="cube")
 (options,args) = parser.parse_args()
 mpi_b           = options.mpi; # boolen - run mpi? #
+save            = options.data_format
 
 ml = 100000 ; # maximal length of an array -- probably not needed anymore but not tested #
 # note: the procedure could calculate the potential, just for some x & y point, but it is not adapted or tested, yet #
@@ -123,7 +134,12 @@ def one_create_potential(db_file,rank,idx, cc=11.0):
         geom = ft_db.extract_atoms_object(idx, get_charges=False, get_model=False);
         if debug: 
             print ("debug:geom", geom)
-    create_biased_cube(geom,V_tip,final_pot_name=final_pot_name(idx),cube_head=cube_head, cc=cc,idx=idx);
+    if atom_style == "stiff" :
+        create_biased_cube(geom,V_tip,final_pot_name=final_pot_name(idx),cube_head=cube_head, cc=cc,idx=idx, save=save);
+    elif atom_style == "OPLS" :
+        create_biased_cube2(geom,V_tip,final_pot_name=final_pot_name(idx),cube_head=cube_head, cc=cc,idx=idx, save=save);
+    else:
+        print ("Unknown 'atom_style', aborting"); sys.exit()
     return idx
 
 def write_to_db(db_file,idx):
