@@ -26,14 +26,17 @@ Requirements
 - `CP2k_mtools <https://github.com/SINGROUP/CP2k_mtools>`_ (python base)
 
 In the latest version the electric field is calculated through C++ procedures stored in `E_field <https://github.com/SINGROUP/KPFM_sim/tree/master/E_field>`_; for their compilation:
+
 - g++
 
 Not directly used in the latest version, but still important due to dependencies:
+
 - Cython (`http://cython.org/ <http://cython.org/>`_)
 - `DFT_gridIO <https://github.com/SINGROUP/DFT_gridIO>`_ (python base)
 
-In the latest vestion totally ommited: For calculating electrostatic potential: 
-`KPFM_FEM_tools <https://github.com/SINGROUP/KPFM_FEM>`_ (python base)
+In the latest vestion totally ommited -  For calculating electrostatic potential of non-conducting tip and sample: 
+
+- `KPFM_FEM_tools <https://github.com/SINGROUP/KPFM_FEM>`_ (python base)
 
 
 WIKI
